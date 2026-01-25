@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { fetchTenders } from './lib/api';
 import TenderCard from './components/TenderCard';
 import FilterBar from './components/FilterBar';
@@ -8,78 +8,220 @@ import Pagination from './components/Pagination';
 import './App.css';
 
 function App() {
-  const [tenders, setTenders] = useState([]);
+  const [allTenders, setAllTenders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(null);
   const [filters, setFilters] = useState({
-    search: ''
+    search: '',
+    province: '',
+    category: '',
+    status: '',
+    closingBefore: '',
+    sortBy: 'closing-soon'
   });
 
-  const itemsPerPage = 250; // Match the original spec - default PageSize to 250
+  // Date range state
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
-  const loadTenders = async (page = 1, searchQuery = '') => {
+  // AbortController ref
+  const abortControllerRef = useRef(null);
+
+  const itemsPerPage = 250;
+
+  // Calculate default date range (last 30 days)
+  useEffect(() => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    setDateTo(today.toISOString().split('T')[0]);
+    setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
+  }, []);
+
+  // Client-side filtering and sorting
+  const filteredAndSortedTenders = useMemo(() => {
+    let result = [...allTenders];
+
+    // Apply search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      result = result.filter(tender => {
+        const title = tender.tender?.title?.toLowerCase() || '';
+        const description = tender.tender?.description?.toLowerCase() || '';
+        const buyer = tender.buyer?.name?.toLowerCase() || '';
+        const procuringEntity = tender.tender?.procuringEntity?.name?.toLowerCase() || '';
+        const province = tender.tender?.province?.toLowerCase() || '';
+        const category = (tender.tender?.mainProcurementCategory || tender.tender?.category)?.toLowerCase() || '';
+
+        return title.includes(searchLower) ||
+               description.includes(searchLower) ||
+               buyer.includes(searchLower) ||
+               procuringEntity.includes(searchLower) ||
+               province.includes(searchLower) ||
+               category.includes(searchLower);
+      });
+    }
+
+    // Apply province filter
+    if (filters.province) {
+      result = result.filter(tender => tender.tender?.province === filters.province);
+    }
+
+    // Apply category filter
+    if (filters.category) {
+      result = result.filter(tender => {
+        const cat = tender.tender?.mainProcurementCategory || tender.tender?.category;
+        return cat === filters.category;
+      });
+    }
+
+    // Apply status filter
+    if (filters.status) {
+      result = result.filter(tender => tender.tender?.status === filters.status);
+    }
+
+    // Apply closing before filter
+    if (filters.closingBefore) {
+      result = result.filter(tender => {
+        const endDate = tender.tender?.tenderPeriod?.endDate;
+        if (!endDate) return false;
+        return new Date(endDate) <= new Date(filters.closingBefore);
+      });
+    }
+
+    // Apply sorting
+    result.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'closing-soon': {
+          // Ascending endDate, nulls last
+          const dateA = a.tender?.tenderPeriod?.endDate;
+          const dateB = b.tender?.tenderPeriod?.endDate;
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          return new Date(dateA) - new Date(dateB);
+        }
+        case 'closing-late': {
+          // Descending endDate, nulls last
+          const dateA = a.tender?.tenderPeriod?.endDate;
+          const dateB = b.tender?.tenderPeriod?.endDate;
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          return new Date(dateB) - new Date(dateA);
+        }
+        case 'title-asc': {
+          const titleA = a.tender?.title || '';
+          const titleB = b.tender?.title || '';
+          return titleA.localeCompare(titleB);
+        }
+        case 'title-desc': {
+          const titleA = a.tender?.title || '';
+          const titleB = b.tender?.title || '';
+          return titleB.localeCompare(titleA);
+        }
+        default:
+          return 0;
+      }
+    });
+
+    return result;
+  }, [allTenders, filters]);
+
+  // Pagination
+  const paginatedTenders = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return filteredAndSortedTenders.slice(startIndex, endIndex);
+  }, [filteredAndSortedTenders, currentPage]);
+
+  const totalPages = Math.ceil(filteredAndSortedTenders.length / itemsPerPage) || 1;
+
+  const loadTenders = async (from, to) => {
+    // Cancel any in-flight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    // Create new AbortController
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
     setLoading(true);
     setError(null);
 
     try {
       const data = await fetchTenders({
-        page,
+        page: 1,
         limit: itemsPerPage,
-        search: searchQuery
+        dateFrom: from,
+        dateTo: to,
+        signal: abortController.signal
       });
+
+      // Check if request was aborted
+      if (abortController.signal.aborted) {
+        return;
+      }
 
       // Handle different response structures
       let tendersData = [];
-      let total = 0;
 
       if (data.results) {
         tendersData = data.results;
-        total = data.total || data.count || tendersData.length;
       } else if (data.data) {
         tendersData = data.data;
-        total = data.total || data.count || tendersData.length;
       } else if (Array.isArray(data)) {
         tendersData = data;
-        total = data.length;
-      } else {
-        tendersData = [];
-        total = 0;
       }
 
-      setTenders(tendersData);
-      setTotalCount(total);
-      setTotalPages(Math.ceil(total / itemsPerPage) || 1);
-      setCurrentPage(page);
+      setAllTenders(tendersData);
+      setCurrentPage(1); // Reset to page 1 when data changes
     } catch (err) {
+      // Ignore abort errors
+      if (err.name === 'AbortError' || err.message === 'canceled') {
+        console.log('Request aborted');
+        return;
+      }
+
       console.error('Error loading tenders:', err);
       setError(err.message || 'Failed to load tenders. Please try again.');
-      setTenders([]);
-      setTotalCount(0);
+      setAllTenders([]);
     } finally {
-      setLoading(false);
+      if (!abortController.signal.aborted) {
+        setLoading(false);
+      }
     }
   };
 
+  // Initial load when date range is set
   useEffect(() => {
-    loadTenders(1, '');
-  }, []);
+    if (dateFrom && dateTo) {
+      loadTenders(dateFrom, dateTo);
+    }
+  }, [dateFrom, dateTo]);
 
   const handleFilterChange = (newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
-    loadTenders(1, newFilters.search);
+    setCurrentPage(1); // Reset to page 1 when filters change
+  };
+
+  const handleDateRangeChange = (newDateFrom, newDateTo) => {
+    setDateFrom(newDateFrom);
+    setDateTo(newDateTo);
   };
 
   const handlePageChange = (page) => {
-    loadTenders(page, filters.search);
-    // Scroll to top
+    setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleRetry = () => {
-    loadTenders(currentPage, filters.search);
+    if (dateFrom && dateTo) {
+      loadTenders(dateFrom, dateTo);
+    }
   };
 
   return (
@@ -109,8 +251,13 @@ function App() {
         <div className="container">
           <FilterBar
             onFilterChange={handleFilterChange}
-            totalCount={totalCount}
+            totalCount={allTenders.length}
+            visibleCount={filteredAndSortedTenders.length}
             isLoading={loading}
+            tenders={allTenders}
+            dateFrom={dateFrom}
+            dateTo={dateTo}
+            onDateRangeChange={handleDateRangeChange}
           />
 
           {loading && <LoadingSpinner />}
@@ -119,26 +266,28 @@ function App() {
             <ErrorMessage message={error} onRetry={handleRetry} />
           )}
 
-          {!loading && !error && tenders.length === 0 && (
+          {!loading && !error && paginatedTenders.length === 0 && (
             <div className="no-results">
-              <p>No tenders found. Try adjusting your search criteria.</p>
+              <p>No tenders found. Try adjusting your search criteria or date range.</p>
             </div>
           )}
 
-          {!loading && !error && tenders.length > 0 && (
+          {!loading && !error && paginatedTenders.length > 0 && (
             <>
               <div className="tender-grid">
-                {tenders.map((tender, index) => (
+                {paginatedTenders.map((tender, index) => (
                   <TenderCard key={tender.ocid || tender.id || index} tender={tender} />
                 ))}
               </div>
 
-              <Pagination
-                currentPage={currentPage}
-                totalPages={totalPages}
-                onPageChange={handlePageChange}
-                isLoading={loading}
-              />
+              {totalPages > 1 && (
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  isLoading={loading}
+                />
+              )}
             </>
           )}
         </div>

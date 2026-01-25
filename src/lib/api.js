@@ -13,9 +13,19 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
  * @param {number} params.page - Page number
  * @param {number} params.limit - Items per page
  * @param {string} params.search - Search query
+ * @param {string} params.dateFrom - Start date (YYYY-MM-DD)
+ * @param {string} params.dateTo - End date (YYYY-MM-DD)
+ * @param {AbortSignal} params.signal - AbortController signal
  * @returns {Promise<Object>} Tenders data
  */
-export const fetchTenders = async ({ page = 1, limit = 20, search = '' } = {}) => {
+export const fetchTenders = async ({ 
+  page = 1, 
+  limit = 250, 
+  search = '', 
+  dateFrom = '', 
+  dateTo = '',
+  signal = null 
+} = {}) => {
   // Return mock data if enabled
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
@@ -53,10 +63,28 @@ export const fetchTenders = async ({ page = 1, limit = 20, search = '' } = {}) =
     if (search) {
       params.search = search;
     }
+    if (dateFrom) {
+      params.dateFrom = dateFrom;
+    }
+    if (dateTo) {
+      params.dateTo = dateTo;
+    }
     
-    const response = await axios.get(`${API_BASE_URL}/api/tenders`, { params });
+    const config = { params };
+    if (signal) {
+      config.signal = signal;
+    }
+    
+    const response = await axios.get(`${API_BASE_URL}/api/tenders`, config);
     return response.data;
   } catch (error) {
+    // Re-throw abort errors
+    if (axios.isCancel(error) || error.name === 'AbortError') {
+      const abortError = new Error('Request canceled');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+    
     console.error('Error fetching tenders:', error);
     throw new Error(error.response?.data?.message || 'Failed to fetch tenders');
   }
