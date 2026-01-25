@@ -38,8 +38,11 @@ const TenderCard = ({ tender }) => {
   return (
     <div className="tender-card">
       <div className="tender-card-header">
+        <div className="tender-badge-row">
+          <span className="tender-badge">Tender</span>
+          <span className="tender-ocid">{ocid}</span>
+        </div>
         <h3 className="tender-title">{title}</h3>
-        <span className="tender-ocid">{ocid}</span>
       </div>
       
       <div className="tender-card-body">
@@ -82,6 +85,7 @@ const TenderCard = ({ tender }) => {
           onClick={handleApply}
           disabled={!documentUrl}
         >
+          <span>💡</span>
           {documentUrl ? 'Apply Now' : 'No Document Available'}
         </button>
       </div>

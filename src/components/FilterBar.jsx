@@ -22,7 +22,7 @@ const FilterBar = ({ onFilterChange, totalCount, isLoading }) => {
   return (
     <div className="filter-bar">
       <div className="filter-bar-header">
-        <h2>South African Tenders</h2>
+        <h2>Featured Opportunities</h2>
         {totalCount !== null && (
           <span className="tender-count">
             {isLoading ? 'Loading...' : `${totalCount} tender${totalCount !== 1 ? 's' : ''} found`}

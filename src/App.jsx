@@ -18,7 +18,7 @@ function App() {
     search: ''
   });
 
-  const itemsPerPage = 20;
+  const itemsPerPage = 250; // Match the original spec - default PageSize to 250
 
   const loadTenders = async (page = 1, searchQuery = '') => {
     setLoading(true);
@@ -86,8 +86,22 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div className="container">
-          <h1 className="app-title">🇿🇦 Market Access</h1>
-          <p className="app-subtitle">South African National Treasury eTenders Portal</p>
+          <h1 className="app-title">Access To Market</h1>
+          <p className="app-subtitle">
+            Connect with the right tenders, opportunities, and government contracts. 
+            Get AI-powered recommendations based on your profile, capacity, and business needs.
+          </p>
+          <div className="header-actions">
+            <button className="header-btn header-btn-primary" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>
+              <span>🔍</span> Browse Opportunities
+            </button>
+            <button className="header-btn header-btn-secondary">
+              <span>📊</span> Dashboard
+            </button>
+            <button className="header-btn header-btn-secondary">
+              <span>👤</span> My Profile
+            </button>
+          </div>
         </div>
       </header>
 

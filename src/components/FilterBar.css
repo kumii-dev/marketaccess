@@ -1,9 +1,10 @@
 .filter-bar {
-  background: white;
-  padding: 1.5rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--white);
+  padding: 2rem 1.5rem;
+  border-radius: var(--border-radius);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   margin-bottom: 2rem;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .filter-bar-header {
@@ -17,15 +18,15 @@
 
 .filter-bar-header h2 {
   margin: 0;
-  font-size: 1.75rem;
-  color: #1a1a1a;
-  font-weight: 700;
+  font-size: 1.5rem;
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 .tender-count {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.95rem;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .search-form {
@@ -34,38 +35,40 @@
 
 .search-input-group {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
   position: relative;
 }
 
 .search-input {
   flex: 1;
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1.25rem;
   padding-right: 2.5rem;
-  font-size: 1rem;
-  border: 2px solid #e0e0e0;
+  font-size: 0.95rem;
+  border: 1px solid var(--gray-medium);
   border-radius: 8px;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
+  background: var(--white);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #1976d2;
+  border-color: var(--sage-green);
+  box-shadow: 0 0 0 3px rgba(143, 166, 142, 0.1);
 }
 
 .search-input:disabled {
-  background-color: #f5f5f5;
+  background-color: var(--gray-light);
   cursor: not-allowed;
 }
 
 .clear-button {
   position: absolute;
-  right: 140px;
+  right: 160px;
   top: 50%;
   transform: translateY(-50%);
   background: none;
   border: none;
-  color: #999;
+  color: var(--text-secondary);
   font-size: 1.2rem;
   cursor: pointer;
   padding: 0.25rem 0.5rem;
@@ -73,28 +76,35 @@
 }
 
 .clear-button:hover {
-  color: #666;
+  color: var(--text-primary);
 }
 
 .search-button {
-  padding: 0.75rem 2rem;
-  background: #1976d2;
-  color: white;
+  padding: 0.85rem 2.5rem;
+  background: var(--sage-green);
+  color: var(--white);
   border: none;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
   white-space: nowrap;
 }
 
 .search-button:hover:not(:disabled) {
-  background: #1565c0;
+  background: var(--sage-green-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.search-button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .search-button:disabled {
-  background: #ccc;
+  background: var(--gray-medium);
+  color: var(--text-secondary);
   cursor: not-allowed;
 }
 

@@ -1,41 +1,63 @@
 .tender-card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: var(--white);
+  border-radius: var(--border-radius);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   padding: 1.5rem;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
   height: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .tender-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .tender-card-header {
   margin-bottom: 1rem;
-  border-bottom: 2px solid #f0f0f0;
-  padding-bottom: 1rem;
+  padding-bottom: 0.75rem;
+}
+
+.tender-badge-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.tender-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--white);
+  background: var(--sage-green);
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .tender-title {
-  font-size: 1.25rem;
+  font-size: 1.1rem;
   font-weight: 600;
-  color: #1a1a1a;
-  margin: 0 0 0.5rem 0;
+  color: var(--text-primary);
+  margin: 0;
   line-height: 1.4;
 }
 
 .tender-ocid {
-  display: inline-block;
-  font-size: 0.75rem;
-  color: #666;
-  background: #f0f0f0;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-family: monospace;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: var(--gray-light);
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-weight: 500;
 }
 
 .tender-card-body {
@@ -46,41 +68,43 @@
 .tender-info-row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.65rem;
   gap: 1rem;
 }
 
 .info-label {
-  font-weight: 600;
-  color: #555;
-  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
   flex-shrink: 0;
 }
 
 .info-value {
-  color: #333;
-  font-size: 0.9rem;
+  color: var(--text-primary);
+  font-size: 0.85rem;
   text-align: right;
+  font-weight: 500;
 }
 
 .tender-value {
   font-weight: 600;
-  color: #2e7d32;
+  color: var(--sage-green-dark);
 }
 
 .tender-description {
   margin-top: 1rem;
   padding-top: 1rem;
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--gray-medium);
 }
 
 .tender-description p {
-  color: #666;
+  color: var(--text-secondary);
   font-size: 0.9rem;
   line-height: 1.6;
   margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 3;
+  line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -89,28 +113,37 @@
 .tender-card-footer {
   margin-top: auto;
   padding-top: 1rem;
-  border-top: 1px solid #f0f0f0;
 }
 
 .apply-button {
   width: 100%;
   padding: 0.75rem 1.5rem;
-  background: #1976d2;
-  color: white;
+  background: var(--orange);
+  color: var(--white);
   border: none;
   border-radius: 8px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .apply-button:hover:not(:disabled) {
-  background: #1565c0;
+  background: var(--orange-hover);
+  transform: translateY(-1px);
+}
+
+.apply-button:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .apply-button:disabled {
-  background: #ccc;
+  background: var(--gray-medium);
+  color: var(--text-secondary);
   cursor: not-allowed;
 }
 
