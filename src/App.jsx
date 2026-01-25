@@ -64,7 +64,7 @@ function App() {
   };
 
   useEffect(() => {
-    loadTenders(1, filters.search);
+    loadTenders(1, '');
   }, []);
 
   const handleFilterChange = (newFilters) => {

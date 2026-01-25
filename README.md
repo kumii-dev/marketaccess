@@ -148,7 +148,7 @@ Each tender card displays:
 
 ## Environment Variables
 
-Create a `.env` file in the root directory (optional):
+Create a `.env` file in the root directory:
 
 ```env
 # Backend server port
@@ -156,7 +156,13 @@ PORT=3001
 
 # Frontend API URL (for production)
 VITE_API_BASE_URL=http://localhost:3001
+
+# Use mock data for demonstration (set to 'true' to use mock data)
+# Useful for development/testing when the external API is not accessible
+VITE_USE_MOCK_DATA=false
 ```
+
+**Note**: The application includes mock tender data for demonstration purposes. Set `VITE_USE_MOCK_DATA=true` in your `.env` file to use mock data instead of the live API. This is useful for development, testing, or when the National Treasury API is unavailable.
 
 ## Browser Support
 
