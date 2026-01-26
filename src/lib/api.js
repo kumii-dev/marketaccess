@@ -1,8 +1,10 @@
 import axios from 'axios';
 import { mockTenders } from './mockData';
 
-// API base URL - use environment variable or default to localhost
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001';
+// API base URL - use environment variable, empty string for production (relative paths), or default to localhost for development
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined 
+  ? import.meta.env.VITE_API_BASE_URL 
+  : (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 // Use mock data for demo purposes when API is unavailable
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';

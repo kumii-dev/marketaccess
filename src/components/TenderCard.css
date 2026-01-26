@@ -118,7 +118,7 @@
 .apply-button {
   width: 100%;
   padding: 0.75rem 1.5rem;
-  background: var(--orange);
+  background: var(--olive-green);
   color: var(--white);
   border: none;
   border-radius: 8px;
@@ -133,7 +133,7 @@
 }
 
 .apply-button:hover:not(:disabled) {
-  background: var(--orange-hover);
+  background: var(--lime-green);
   transform: translateY(-1px);
 }
 
