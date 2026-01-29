@@ -3,7 +3,7 @@
   display: flex;
   flex-direction: column;
   background: var(--gray-light);
-  margin-left: 115px; /* Space for sidebar */
+  margin-left: 630px; /* Space for sidebar (115px + 515px) */
   transition: margin-left 0.3s ease;
 }
 
