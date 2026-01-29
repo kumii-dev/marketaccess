@@ -12,6 +12,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: false
 }));
+
 app.use(express.json());
 
 // Health check endpoint

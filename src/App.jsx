@@ -5,6 +5,7 @@ import FilterBar from './components/FilterBar';
 import LoadingSpinner from './components/LoadingSpinner';
 import ErrorMessage from './components/ErrorMessage';
 import Pagination from './components/Pagination';
+import Sidebar from './components/Sidebar';
 import './App.css';
 
 function App() {
@@ -12,6 +13,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [currentSection, setCurrentSection] = useState('market');
   const [filters, setFilters] = useState({
     search: '',
     province: '',
@@ -224,8 +226,18 @@ function App() {
     }
   };
 
+  const handleSectionChange = (section) => {
+    setCurrentSection(section);
+    // You can add navigation logic here for different sections
+    console.log('Navigating to:', section);
+  };
+
   return (
     <div className="app">
+      <Sidebar 
+        currentSection={currentSection} 
+        onSectionChange={handleSectionChange}
+      />
       <header className="app-header">
         <div className="container">
           <h1 className="app-title">Access To Market</h1>

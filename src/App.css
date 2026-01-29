@@ -3,6 +3,8 @@
   display: flex;
   flex-direction: column;
   background: var(--gray-light);
+  margin-left: 115px; /* Space for sidebar */
+  transition: margin-left 0.3s ease;
 }
 
 .app-header {
@@ -124,6 +126,10 @@
 
 /* Responsive design */
 @media (max-width: 768px) {
+  .app {
+    margin-left: 70px; /* Smaller sidebar on mobile */
+  }
+  
   .app-header {
     padding: 2rem 0 1.5rem 0;
   }
