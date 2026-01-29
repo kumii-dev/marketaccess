@@ -72,7 +72,7 @@ function Sidebar({ currentSection, onSectionChange }) {
       </div>
 
       {/* Bottom Section - Content Panel */}
-      <div className="sidebar-content">
+      <div className="sidebar-content shadow-lg">
         {/* Search Bar */}
         <div className="sidebar-search">
           <i className="bi bi-search search-icon"></i>
