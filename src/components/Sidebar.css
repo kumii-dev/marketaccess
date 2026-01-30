@@ -10,8 +10,8 @@
 
 /* Top Section - Narrow Navigation Bar */
 .sidebar-top {
-  width: 115px;
-  background: #6B7C5D;
+  width: 4rem;
+  background: #7a8567;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -21,17 +21,19 @@
 /* Bottom Section - Content Panel */
 .sidebar-content {
   width: 19rem;
-  background: #F5F5F3;
+  background: #ffffff;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   overflow-x: hidden;
-  border-left: 1px solid #E5E5E3;
+  border-left: 1px solid #dfdfdf;
+    border-right: 1px solid #e4e4e4;
 }
 
 /* Search Bar */
 .sidebar-search {
-  padding: 0.5rem;
+  padding-right: 0.75rem;
+    padding-left: 0.75rem;
   display: flex;
   align-items: center;
   gap: 0.25rem;
@@ -72,7 +74,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1rem;
+  padding: 0.9rem;
   background: transparent;
   border: none;
   color: #fff;
@@ -103,7 +105,7 @@
 }
 
 .nav-icon {
-  font-size: 1.5rem;
+  font-size: 1rem;
 }
 
 .nav-badge {
@@ -133,7 +135,7 @@
 
 .section-title {
   color: #2D2D2D;
-  font-size: 1.1rem;
+  font-size: 0.92rem;
   font-weight: 600;
   margin: 0 0 1rem 0;
   padding: 0 1.5rem;
@@ -161,7 +163,7 @@
 }
 
 .gateway-item.active {
-  background: #ADC686;
+  background: #c5df96;
   color: #2D2D2D;
 }
 
@@ -169,8 +171,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
+  width: 2rem;
+  height: 2rem;
   background: #6B7C5D;
   border-radius: 8px;
   font-size: 1.2rem;
@@ -234,18 +236,18 @@
 /* Footer */
 .sidebar-footer {
   margin-top: auto;
-  padding: 1.5rem;
+  padding: 1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .user-profile {
-  width: 50px;
-  height: 50px;
+  width: 3rem;
+  height: 3rem;
   border-radius: 50%;
   background: #ADC686;
   border: none;
   color: #2D2D2D;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 1.1rem;
   cursor: pointer;
   transition: transform 0.2s ease;
