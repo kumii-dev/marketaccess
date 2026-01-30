@@ -144,10 +144,8 @@ export const getTenderDocuments = (release) => {
       documents = release.releases[0].awards.flatMap(award => award.documents || []);
     }
     
-    console.log('Found documents for tender:', release?.ocid, documents);
-    
     // Map documents to a cleaner format
-    const formattedDocs = documents
+    return documents
       .filter(doc => doc.url) // Only include documents with URLs
       .map(doc => ({
         id: doc.id || Math.random().toString(36).substr(2, 9),
@@ -157,9 +155,6 @@ export const getTenderDocuments = (release) => {
         format: doc.format || 'pdf',
         language: doc.language || 'en'
       }));
-    
-    console.log('Formatted documents:', formattedDocs.length, formattedDocs);
-    return formattedDocs;
   } catch (error) {
     console.error('Error extracting documents:', error);
     return [];

@@ -16,9 +16,6 @@ const TenderCard = ({ tender }) => {
   const value = getTenderValue(tender);
   const documents = getTenderDocuments(tender);
   
-  // Debug: Log documents to see what we're getting
-  console.log('Tender:', tender?.ocid || 'unknown', 'Documents:', documents.length, documents);
-  
   // Extract dates
   const tenderPeriod = tender?.tender?.tenderPeriod || tender?.releases?.[0]?.tender?.tenderPeriod;
   const startDate = tenderPeriod?.startDate;
