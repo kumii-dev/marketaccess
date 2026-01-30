@@ -134,7 +134,12 @@ const TenderCard = ({ tender }) => {
                     onClick={() => handleDownloadDocument(doc.url)}
                   >
                     <i className="bi bi-file-earmark-text"></i>
-                    <span className="document-title">{doc.title}</span>
+                    <div className="document-info">
+                      <span className="document-title">{doc.title}</span>
+                      {doc.source && (
+                        <span className="document-source">{doc.source}</span>
+                      )}
+                    </div>
                     <i className="bi bi-download"></i>
                   </button>
                 ))}

@@ -124,37 +124,70 @@ export const getTenderDocumentUrl = (release) => {
  */
 export const getTenderDocuments = (release) => {
   try {
-    // Try to find tender documents in various possible locations
-    let documents = [];
+    let allDocuments = [];
     
-    // Check main tender documents
-    if (release?.tender?.documents) {
-      documents = release.tender.documents;
-    } 
-    // Check in releases array
-    else if (release?.releases?.[0]?.tender?.documents) {
-      documents = release.releases[0].tender.documents;
-    }
-    // Check for awards documents
-    else if (release?.awards && Array.isArray(release.awards)) {
-      documents = release.awards.flatMap(award => award.documents || []);
-    }
-    // Check in releases awards
-    else if (release?.releases?.[0]?.awards && Array.isArray(release.releases[0].awards)) {
-      documents = release.releases[0].awards.flatMap(award => award.documents || []);
+    // Helper function to add documents from an array
+    const addDocuments = (docs, source = '') => {
+      if (Array.isArray(docs)) {
+        docs.forEach(doc => {
+          if (doc.url) {
+            allDocuments.push({
+              id: doc.id || Math.random().toString(36).substr(2, 9),
+              title: doc.title || doc.description || `${source} Document`,
+              url: doc.url,
+              type: doc.documentType || 'unknown',
+              format: doc.format || 'pdf',
+              language: doc.language || 'en',
+              source: source // Add source to know where it came from
+            });
+          }
+        });
+      }
+    };
+    
+    // Check in releases array first
+    const releaseData = release?.releases?.[0] || release;
+    
+    // 1. Tender documents
+    if (releaseData?.tender?.documents) {
+      addDocuments(releaseData.tender.documents, 'Tender');
     }
     
-    // Map documents to a cleaner format
-    return documents
-      .filter(doc => doc.url) // Only include documents with URLs
-      .map(doc => ({
-        id: doc.id || Math.random().toString(36).substr(2, 9),
-        title: doc.title || doc.description || 'Tender Document',
-        url: doc.url,
-        type: doc.documentType || 'unknown',
-        format: doc.format || 'pdf',
-        language: doc.language || 'en'
-      }));
+    // 2. Planning documents
+    if (releaseData?.planning?.documents) {
+      addDocuments(releaseData.planning.documents, 'Planning');
+    }
+    
+    // 3. Contract documents
+    if (releaseData?.contracts && Array.isArray(releaseData.contracts)) {
+      releaseData.contracts.forEach((contract, index) => {
+        // Contract documents
+        if (contract.documents) {
+          addDocuments(contract.documents, `Contract ${index + 1}`);
+        }
+        
+        // Contract implementation documents
+        if (contract.implementation?.documents) {
+          addDocuments(contract.implementation.documents, `Implementation ${index + 1}`);
+        }
+      });
+    }
+    
+    // 4. Awards documents (if they have any)
+    if (releaseData?.awards && Array.isArray(releaseData.awards)) {
+      releaseData.awards.forEach((award, index) => {
+        if (award.documents) {
+          addDocuments(award.documents, `Award ${index + 1}`);
+        }
+      });
+    }
+    
+    // Remove duplicates based on URL
+    const uniqueDocuments = allDocuments.filter((doc, index, self) =>
+      index === self.findIndex((d) => d.url === doc.url)
+    );
+    
+    return uniqueDocuments;
   } catch (error) {
     console.error('Error extracting documents:', error);
     return [];
