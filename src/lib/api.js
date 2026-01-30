@@ -125,12 +125,29 @@ export const getTenderDocumentUrl = (release) => {
 export const getTenderDocuments = (release) => {
   try {
     // Try to find tender documents in various possible locations
-    const documents = release?.tender?.documents || 
-                     release?.releases?.[0]?.tender?.documents ||
-                     [];
+    let documents = [];
+    
+    // Check main tender documents
+    if (release?.tender?.documents) {
+      documents = release.tender.documents;
+    } 
+    // Check in releases array
+    else if (release?.releases?.[0]?.tender?.documents) {
+      documents = release.releases[0].tender.documents;
+    }
+    // Check for awards documents
+    else if (release?.awards && Array.isArray(release.awards)) {
+      documents = release.awards.flatMap(award => award.documents || []);
+    }
+    // Check in releases awards
+    else if (release?.releases?.[0]?.awards && Array.isArray(release.releases[0].awards)) {
+      documents = release.releases[0].awards.flatMap(award => award.documents || []);
+    }
+    
+    console.log('Found documents for tender:', release?.ocid, documents);
     
     // Map documents to a cleaner format
-    return documents
+    const formattedDocs = documents
       .filter(doc => doc.url) // Only include documents with URLs
       .map(doc => ({
         id: doc.id || Math.random().toString(36).substr(2, 9),
@@ -140,6 +157,9 @@ export const getTenderDocuments = (release) => {
         format: doc.format || 'pdf',
         language: doc.language || 'en'
       }));
+    
+    console.log('Formatted documents:', formattedDocs.length, formattedDocs);
+    return formattedDocs;
   } catch (error) {
     console.error('Error extracting documents:', error);
     return [];
