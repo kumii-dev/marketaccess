@@ -27,7 +27,7 @@ function Sidebar({ currentSection, onSectionChange }) {
   ];
 
   const marketTools = [
-    { id: 'credit-check', label: 'Credit Score Check' },
+    { id: 'credit-check', label: 'Gov Tenders' },
     { id: 'document-generator', label: 'Document Generator' },
     { id: 'financial-model', label: 'Financial Model Builder' },
     { id: 'valuation', label: 'Universal Valuation Model' },

@@ -147,6 +147,87 @@
   cursor: not-allowed;
 }
 
+/* Document Actions */
+.document-actions {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.document-actions .apply-button {
+  flex: 1;
+}
+
+.documents-toggle {
+  padding: 0.75rem 1rem;
+  background: var(--gray-light);
+  color: var(--text-primary);
+  border: 1px solid var(--gray-medium);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.documents-toggle:hover {
+  background: var(--sage-green-light);
+  transform: translateY(-1px);
+}
+
+/* Documents List */
+.documents-list {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--gray-medium);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.document-item {
+  padding: 0.65rem 1rem;
+  background: var(--gray-light);
+  border: 1px solid var(--gray-medium);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  text-align: left;
+  color: var(--text-primary);
+}
+
+.document-item:hover {
+  background: var(--sage-green-light);
+  border-color: var(--sage-green);
+  transform: translateX(4px);
+}
+
+.document-item .bi-file-earmark-text {
+  color: var(--sage-green);
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.document-item .bi-download {
+  margin-left: auto;
+  color: var(--olive-green);
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+.document-title {
+  flex: 1;
+  font-weight: 500;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .tender-card {

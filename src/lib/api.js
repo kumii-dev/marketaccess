@@ -118,6 +118,35 @@ export const getTenderDocumentUrl = (release) => {
 };
 
 /**
+ * Extract all tender documents from OCDS release
+ * @param {Object} release - OCDS release object
+ * @returns {Array} Array of document objects with title, url, and type
+ */
+export const getTenderDocuments = (release) => {
+  try {
+    // Try to find tender documents in various possible locations
+    const documents = release?.tender?.documents || 
+                     release?.releases?.[0]?.tender?.documents ||
+                     [];
+    
+    // Map documents to a cleaner format
+    return documents
+      .filter(doc => doc.url) // Only include documents with URLs
+      .map(doc => ({
+        id: doc.id || Math.random().toString(36).substr(2, 9),
+        title: doc.title || doc.description || 'Tender Document',
+        url: doc.url,
+        type: doc.documentType || 'unknown',
+        format: doc.format || 'pdf',
+        language: doc.language || 'en'
+      }));
+  } catch (error) {
+    console.error('Error extracting documents:', error);
+    return [];
+  }
+};
+
+/**
  * Format date to readable string
  * @param {string} dateString - ISO date string
  * @returns {string} Formatted date

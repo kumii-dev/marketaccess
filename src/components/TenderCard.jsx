@@ -1,18 +1,20 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   getTenderTitle, 
   getTenderDescription, 
   getTenderValue,
-  getTenderDocumentUrl,
+  getTenderDocuments,
   formatDate 
 } from '../lib/api';
 import './TenderCard.css';
 
 const TenderCard = ({ tender }) => {
+  const [showDocuments, setShowDocuments] = useState(false);
+  
   const title = getTenderTitle(tender);
   const description = getTenderDescription(tender);
   const value = getTenderValue(tender);
-  const documentUrl = getTenderDocumentUrl(tender);
+  const documents = getTenderDocuments(tender);
   
   // Extract dates
   const tenderPeriod = tender?.tender?.tenderPeriod || tender?.releases?.[0]?.tender?.tenderPeriod;
@@ -27,13 +29,27 @@ const TenderCard = ({ tender }) => {
   // Extract OCID
   const ocid = tender?.ocid || tender?.releases?.[0]?.ocid || 'N/A';
 
-  const handleApply = () => {
-    if (documentUrl) {
-      window.open(documentUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      alert('Tender document URL not available');
+  const handleDownloadDocument = (url) => {
+    if (url) {
+      window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
+
+  const handleDownloadAll = () => {
+    if (documents.length === 0) {
+      alert('No documents available for this tender');
+      return;
+    }
+    
+    // Open all documents in new tabs with a slight delay to prevent popup blocking
+    documents.forEach((doc, index) => {
+      setTimeout(() => {
+        window.open(doc.url, '_blank', 'noopener,noreferrer');
+      }, index * 200); // 200ms delay between each document
+    });
+  };
+
+  const hasDocuments = documents.length > 0;
 
   return (
     <div className="tender-card">
@@ -80,14 +96,60 @@ const TenderCard = ({ tender }) => {
       </div>
       
       <div className="tender-card-footer">
-        <button 
-          className="apply-button"
-          onClick={handleApply}
-          disabled={!documentUrl}
-        >
-          <span>💡</span>
-          {documentUrl ? 'Apply Now' : 'No Document Available'}
-        </button>
+        {hasDocuments ? (
+          <>
+            {documents.length === 1 ? (
+              <button 
+                className="apply-button"
+                onClick={() => handleDownloadDocument(documents[0].url)}
+              >
+                <i className="bi bi-download"></i>
+                Download Document
+              </button>
+            ) : (
+              <div className="document-actions">
+                <button 
+                  className="apply-button"
+                  onClick={handleDownloadAll}
+                >
+                  <i className="bi bi-download"></i>
+                  Download All ({documents.length})
+                </button>
+                <button 
+                  className="documents-toggle"
+                  onClick={() => setShowDocuments(!showDocuments)}
+                >
+                  <i className={`bi bi-chevron-${showDocuments ? 'up' : 'down'}`}></i>
+                  {showDocuments ? 'Hide' : 'Show'} Documents
+                </button>
+              </div>
+            )}
+            
+            {showDocuments && documents.length > 1 && (
+              <div className="documents-list">
+                {documents.map((doc) => (
+                  <button
+                    key={doc.id}
+                    className="document-item"
+                    onClick={() => handleDownloadDocument(doc.url)}
+                  >
+                    <i className="bi bi-file-earmark-text"></i>
+                    <span className="document-title">{doc.title}</span>
+                    <i className="bi bi-download"></i>
+                  </button>
+                ))}
+              </div>
+            )}
+          </>
+        ) : (
+          <button 
+            className="apply-button"
+            disabled
+          >
+            <i className="bi bi-x-circle"></i>
+            No Documents Available
+          </button>
+        )}
       </div>
     </div>
   );
