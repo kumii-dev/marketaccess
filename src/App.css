@@ -25,6 +25,7 @@
   -webkit-text-fill-color: transparent;
   background-clip: text;
   letter-spacing: -0.5px;
+
 }
 
 .app-subtitle {
@@ -150,6 +151,7 @@
   
   .app-title {
     font-size: 2rem;
+    
   }
   
   .app-subtitle {

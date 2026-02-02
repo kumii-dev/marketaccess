@@ -254,7 +254,7 @@ function App() {
       <header className="app-header">
         <div className="container">
           <h1 style={{fontSize: '4rem', fontWeight: 700}} className="app-title">Access To Market</h1>
-          <p className="app-subtitle">
+          <p style={{lineHeight: '1.5'}} className="app-subtitle">
             Powering market access with trust & transparency
           </p>
           <p className="app-description">
