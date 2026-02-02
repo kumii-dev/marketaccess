@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { 
   getTenderTitle, 
   getTenderDescription, 
-  getTenderValue,
   getTenderDocuments,
   formatDate 
 } from '../lib/api';
@@ -13,7 +12,6 @@ const TenderCard = ({ tender }) => {
   
   const title = getTenderTitle(tender);
   const description = getTenderDescription(tender);
-  const value = getTenderValue(tender);
   const documents = getTenderDocuments(tender);
   
   // Extract dates
@@ -28,6 +26,10 @@ const TenderCard = ({ tender }) => {
   
   // Extract OCID
   const ocid = tender?.ocid || tender?.releases?.[0]?.ocid || 'N/A';
+  
+  // Extract briefing session information
+  const briefingSession = tender?.tender?.briefingSession || 
+                         tender?.releases?.[0]?.tender?.briefingSession;
 
   const handleDownloadDocument = (url) => {
     if (url) {
@@ -67,13 +69,29 @@ const TenderCard = ({ tender }) => {
           <span className="info-value">{buyer}</span>
         </div>
         
-        {value && (
-          <div className="tender-info-row">
-            <span className="info-label">Value:</span>
-            <span className="info-value tender-value">
-              {value.currency} {value.amount?.toLocaleString('en-ZA')}
-            </span>
-          </div>
+        {briefingSession?.isSession && (
+          <>
+            <div className="tender-info-row">
+              <span className="info-label">Briefing Session:</span>
+              <span className="info-value">
+                {briefingSession.compulsory ? 'Compulsory' : 'Optional'}
+              </span>
+            </div>
+            
+            {briefingSession.date && (
+              <div className="tender-info-row">
+                <span className="info-label">Session Date:</span>
+                <span className="info-value">{formatDate(briefingSession.date)}</span>
+              </div>
+            )}
+            
+            {briefingSession.venue && (
+              <div className="tender-info-row">
+                <span className="info-label">Venue:</span>
+                <span className="info-value">{briefingSession.venue}</span>
+              </div>
+            )}
+          </>
         )}
         
         {startDate && (

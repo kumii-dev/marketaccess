@@ -268,7 +268,7 @@ const FilterBar = ({
             disabled={isLoading}
           >
             <option value="closing-soon">Closing Soon</option>
-            <option value="closing-late">Closing Late</option>
+            <option value="closing-late">Closing Date</option>
             <option value="title-asc">Title A-Z</option>
             <option value="title-desc">Title Z-A</option>
           </select>
