@@ -74,7 +74,7 @@
 }
 
 .header-btn-primary:hover {
-  background: var(--sage-green-dark);
+  background: #c5df96;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(143, 166, 142, 0.3);
 }
@@ -86,7 +86,7 @@
 }
 
 .header-btn-secondary:hover {
-  background: var(--gray-light);
+  background: rgb(195, 195, 195);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
