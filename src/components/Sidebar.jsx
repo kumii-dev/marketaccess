@@ -27,8 +27,8 @@ function Sidebar({ currentSection, onSectionChange }) {
   ];
 
   const marketTools = [
-    { id: 'credit-check', label: 'Gov Tenders' },
-    { id: 'document-generator', label: 'Document Generator' },
+    { id: 'government-tenders', label: 'Government Tenders' },
+    { id: 'private-tenders', label: 'Private Tenders' },
     { id: 'financial-model', label: 'Financial Model Builder' },
     { id: 'valuation', label: 'Universal Valuation Model' },
     { id: 'matching', label: 'Smart Matching' },

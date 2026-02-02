@@ -9,7 +9,8 @@ const FilterBar = ({
   tenders = [],
   dateFrom,
   dateTo,
-  onDateRangeChange
+  onDateRangeChange,
+  hideDateRange = false
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [province, setProvince] = useState('');
@@ -144,30 +145,32 @@ const FilterBar = ({
       </div>
 
       {/* Date Range Filters */}
-      <div className="date-range-section">
-        <div className="date-input-group">
-          <label htmlFor="dateFrom">From:</label>
-          <input
-            id="dateFrom"
-            type="date"
-            className="date-input"
-            value={dateFrom}
-            onChange={(e) => onDateRangeChange(e.target.value, dateTo)}
-            disabled={isLoading}
-          />
+      {!hideDateRange && (
+        <div className="date-range-section">
+          <div className="date-input-group">
+            <label htmlFor="dateFrom">From:</label>
+            <input
+              id="dateFrom"
+              type="date"
+              className="date-input"
+              value={dateFrom}
+              onChange={(e) => onDateRangeChange(e.target.value, dateTo)}
+              disabled={isLoading}
+            />
+          </div>
+          <div className="date-input-group">
+            <label htmlFor="dateTo">To:</label>
+            <input
+              id="dateTo"
+              type="date"
+              className="date-input"
+              value={dateTo}
+              onChange={(e) => onDateRangeChange(dateFrom, e.target.value)}
+              disabled={isLoading}
+            />
+          </div>
         </div>
-        <div className="date-input-group">
-          <label htmlFor="dateTo">To:</label>
-          <input
-            id="dateTo"
-            type="date"
-            className="date-input"
-            value={dateTo}
-            onChange={(e) => onDateRangeChange(dateFrom, e.target.value)}
-            disabled={isLoading}
-          />
-        </div>
-      </div>
+      )}
       
       {/* Search Input */}
       <div className="search-section">

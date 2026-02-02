@@ -6,6 +6,7 @@ import LoadingSpinner from './components/LoadingSpinner';
 import ErrorMessage from './components/ErrorMessage';
 import Pagination from './components/Pagination';
 import Sidebar from './components/Sidebar';
+import PrivateTendersPage from './components/PrivateTendersPage';
 import './App.css';
 
 function App() {
@@ -13,7 +14,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentSection, setCurrentSection] = useState('market');
+  const [currentSection, setCurrentSection] = useState('government-tenders');
   const [filters, setFilters] = useState({
     search: '',
     province: '',
@@ -228,10 +229,22 @@ function App() {
 
   const handleSectionChange = (section) => {
     setCurrentSection(section);
-    // You can add navigation logic here for different sections
-    console.log('Navigating to:', section);
   };
 
+  // Render Private Tenders page if that section is selected
+  if (currentSection === 'private-tenders') {
+    return (
+      <div className="app">
+        <Sidebar 
+          currentSection={currentSection} 
+          onSectionChange={handleSectionChange}
+        />
+        <PrivateTendersPage />
+      </div>
+    );
+  }
+
+  // Default: Render Government Tenders page
   return (
     <div className="app">
       <Sidebar 
