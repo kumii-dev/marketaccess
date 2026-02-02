@@ -253,20 +253,23 @@ function App() {
       />
       <header className="app-header">
         <div className="container">
-          <h1 className="app-title">Access To Market</h1>
+          <h1 style={{fontSize: '4rem', fontWeight: 700}} className="app-title">Access To Market</h1>
           <p className="app-subtitle">
-            Connect with the right tenders, opportunities, and government contracts. 
-            Get AI-powered recommendations based on your profile, capacity, and business needs.
+            Powering market access with trust & transparency
+          </p>
+          <p className="app-description">
+            Connect with funders, corporates, and buyers through our trusted ecosystem
+            powered by credit scoring, profiling, and intelligent matching.
           </p>
           <div className="header-actions">
             <button className="header-btn header-btn-primary" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>
-              <span>🔍</span> Browse Opportunities
+              Browse Opportunities
             </button>
             <button className="header-btn header-btn-secondary">
-              <span>📊</span> Dashboard
+             Dashboard
             </button>
             <button className="header-btn header-btn-secondary">
-              <span>👤</span> My Profile
+              My Profile
             </button>
           </div>
         </div>

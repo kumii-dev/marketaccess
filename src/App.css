@@ -17,19 +17,33 @@
 .app-title {
   margin: 0;
   font-size: 3rem;
-  font-weight: 400;
+  font-weight: 700;
   text-align: center;
-  color: var(--sage-green);
+  background: #9DB17E;
+  background: linear-gradient(90deg, rgba(157, 177, 126, 1) 0%, rgba(195, 221, 148, 1) 50%, rgba(157, 177, 126, 1) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
   letter-spacing: -0.5px;
 }
 
 .app-subtitle {
-  margin: 1rem auto 2rem auto;
+  margin: 1.5rem auto 0.5rem auto;
+  font-size: 1.5rem;
+  text-align: center;
+  color: var(--text-primary);
+  font-weight: 500;
+  max-width: 900px;
+  line-height: 1.4;
+}
+
+.app-description {
+  margin: 0.5rem auto 2rem auto;
   font-size: 1.1rem;
   text-align: center;
   color: var(--text-secondary);
   font-weight: 400;
-  max-width: 800px;
+  max-width: 900px;
   line-height: 1.6;
 }
 

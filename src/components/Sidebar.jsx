@@ -28,10 +28,7 @@ function Sidebar({ currentSection, onSectionChange }) {
 
   const marketTools = [
     { id: 'government-tenders', label: 'Government Tenders' },
-    { id: 'private-tenders', label: 'Private Tenders' },
-    { id: 'financial-model', label: 'Financial Model Builder' },
-    { id: 'valuation', label: 'Universal Valuation Model' },
-    { id: 'matching', label: 'Smart Matching' },
+    { id: 'private-tenders', label: 'Private Sector Tenders' },
   ];
 
   return (
@@ -117,7 +114,7 @@ function Sidebar({ currentSection, onSectionChange }) {
           
           <button 
             className="more-dropdown"
-            onClick={() => setShowMoreMenu(!showMoreMenu)}
+            onClick={() => setShowMoreMenu(!showMoreMenu)} style={{ display: 'none' }}
           >
             <span>More</span>
             <i className="bi bi-chevron-down dropdown-icon"></i>
