@@ -8,13 +8,13 @@ function Sidebar({ currentSection, onSectionChange }) {
   const mainNavItems = [
     { id: 'home', icon: 'bi-house-door', label: 'Home', badge: null },
     { id: 'activity', icon: 'bi-activity', label: 'Activity', badge: 3 },
-    { id: 'messages', icon: 'bi-chat-dots', label: 'Messages', badge: null },
-    { id: 'calendar', icon: 'bi-calendar3', label: 'Calendar', badge: null },
+    { id: 'messages', icon: 'bi-chat', label: 'Messages', badge: null },
+    { id: 'calendar', icon: 'bi-calendar', label: 'Calendar', badge: null },
     { id: 'calls', icon: 'bi-telephone', label: 'Calls', badge: null },
     { id: 'files', icon: 'bi-folder', label: 'Files', badge: null },
     { id: 'briefcase', icon: 'bi-briefcase', label: 'Briefcase', badge: null },
-    { id: 'apps', icon: 'bi-grid-3x3', label: 'Apps', badge: null, highlight: true },
-    { id: 'support', icon: 'bi-headset', label: 'Support', badge: null },
+    { id: 'apps', icon: 'bi-grid-3x3-gap', label: 'Apps', badge: null, highlight: true },
+    { id: 'support', icon: 'bi-three-dots', label: 'More', badge: null },
   ];
 
   const gatewayItems = [
