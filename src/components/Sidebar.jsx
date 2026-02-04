@@ -72,6 +72,8 @@ function Sidebar({ currentSection, onSectionChange }) {
 
       {/* Bottom Section - Content Panel */}
       <div className="sidebar-content shadow-lg">
+        <p style={{ marginTop: '0.8rem', marginBottom: '0.1rem' }}></p>
+
         {/* Search Bar */}
         <div className="sidebar-search">
           <i className="bi bi-search search-icon"></i>
@@ -82,9 +84,13 @@ function Sidebar({ currentSection, onSectionChange }) {
           />
         </div>
 
+        <p>
+          <hr style={{ border: 'none', borderTop: '1px solid #eee', margin: '-0.5rem 0 0 0 ' }}></hr>
+        </p>
+
         {/* Growth Gateway Section */}
-        <div className="sidebar-section">
-          <h3 className="section-title">Growth Gateway</h3>
+        <div style={{ marginTop: '-1.8rem', marginBottom: '0.1rem' }} className="sidebar-section">
+          <h3 style={{ marginLeft: '-1rem', fontWeight: 500 }} className="section-title">Growth Gateway</h3>
           
           {gatewayItems.map(item => (
             item.url ? (
@@ -114,6 +120,7 @@ function Sidebar({ currentSection, onSectionChange }) {
             )
           ))}
         </div>
+        
 
         {/* Access To Market Tools */}
         <div className="sidebar-section market-tools">
