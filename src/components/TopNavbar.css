@@ -1,0 +1,163 @@
+.top-navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 65px;
+  background-color: #f5f5f5;
+  background: linear-gradient(90deg,rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 1) 50%, rgba(122, 133, 103, 1) 100%);
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+  z-index: 999;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.navbar-left {
+  display: flex;
+  align-items: center;
+}
+
+.navbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.logo-image {
+  height: 3.4rem;
+  width: auto;
+  object-fit: contain;
+}
+
+.navbar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.navbar-btn {
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.875rem;
+  color: #4a4a4a;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.navbar-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.navbar-btn i {
+  font-size: 1.1rem;
+}
+
+.theme-toggle {
+  padding: 0.5rem;
+}
+
+.theme-toggle i {
+  font-size: 1.2rem;
+}
+
+.notification-btn {
+  position: relative;
+  padding: 0.5rem;
+}
+
+.notification-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background-color: #ef4444;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.navbar-divider {
+  width: 1px;
+  height: 24px;
+  background-color: #d0d0d0;
+  margin: 0 0.25rem;
+}
+
+.profile-btn {
+  font-weight: 500;
+}
+
+.signout-btn {
+  font-weight: 500;
+}
+
+.user-email {
+  font-size: 0.8rem;
+  color: #6b7280;
+  padding: 0 0.5rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .user-email {
+    display: none;
+  }
+  
+  .mode-toggle span,
+  .admin-link span,
+  .about-link span {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .top-navbar {
+    padding: 0 1rem;
+  }
+  
+  .navbar-right {
+    gap: 0.5rem;
+  }
+  
+  .navbar-btn {
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8rem;
+  }
+  
+  .profile-btn span,
+  .signout-btn span {
+    display: none;
+  }
+  
+  .logo-image {
+    height: 32px;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-link,
+  .about-link {
+    display: none;
+  }
+  
+  .logo-image {
+    height: 28px;
+  }
+}

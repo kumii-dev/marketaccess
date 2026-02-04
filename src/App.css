@@ -4,6 +4,7 @@
   flex-direction: column;
   background: var(--gray-light);
   margin-left: calc(115px + 19rem); /* Space for sidebar (115px + 19rem content panel) */
+  margin-top: 60px; /* Space for top navbar */
   transition: margin-left 0.3s ease;
 }
 

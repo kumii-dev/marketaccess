@@ -7,6 +7,7 @@ import ErrorMessage from './components/ErrorMessage';
 import Pagination from './components/Pagination';
 import Sidebar from './components/Sidebar';
 import PrivateTendersPage from './components/PrivateTendersPage';
+import TopNavbar from './components/TopNavbar';
 import './App.css';
 
 function App() {
@@ -235,6 +236,7 @@ function App() {
   if (currentSection === 'private-tenders') {
     return (
       <div className="app">
+        <TopNavbar />
         <Sidebar 
           currentSection={currentSection} 
           onSectionChange={handleSectionChange}
@@ -247,6 +249,7 @@ function App() {
   // Default: Render Government Tenders page
   return (
     <div className="app">
+      <TopNavbar />
       <Sidebar 
         currentSection={currentSection} 
         onSectionChange={handleSectionChange}

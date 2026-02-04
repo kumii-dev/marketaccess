@@ -63,7 +63,7 @@ function Sidebar({ currentSection, onSectionChange }) {
         {/* User Profile */}
         <div className="sidebar-footer">
           <button className="user-profile" title="User Profile">
-            <span className="user-avatar">KM</span>
+            <span className="user-avatar">U</span>
           </button>
         </div>
       </div>
