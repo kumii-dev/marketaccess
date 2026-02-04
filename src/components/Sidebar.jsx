@@ -6,24 +6,24 @@ function Sidebar({ currentSection, onSectionChange }) {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const mainNavItems = [
-    { id: 'home', icon: 'bi-house-door', label: 'Home', badge: null },
-    { id: 'activity', icon: 'bi-activity', label: 'Activity', badge: 3 },
-    { id: 'messages', icon: 'bi-chat', label: 'Messages', badge: null },
-    { id: 'calendar', icon: 'bi-calendar', label: 'Calendar', badge: null },
-    { id: 'calls', icon: 'bi-telephone', label: 'Calls', badge: null },
-    { id: 'files', icon: 'bi-folder', label: 'Files', badge: null },
-    { id: 'briefcase', icon: 'bi-briefcase', label: 'Briefcase', badge: null },
-    { id: 'apps', icon: 'bi-grid-3x3-gap', label: 'Apps', badge: null, highlight: true },
-    { id: 'support', icon: 'bi-three-dots', label: 'More', badge: null },
+    { id: 'home', icon: 'bi-house-door', label: 'Home', badge: null, url: 'https://kumii.africa' },
+    { id: 'activity', icon: 'bi-activity', label: 'Activity', badge: 3, url: 'https://kumii.africa/activity' },
+    { id: 'messages', icon: 'bi-chat', label: 'Messages', badge: null, url: 'https://kumii.africa/messaging' },
+    { id: 'calendar', icon: 'bi-calendar', label: 'Calendar', badge: null, url: 'https://kumii.africa/calendar' },
+    { id: 'calls', icon: 'bi-telephone', label: 'Calls', badge: null, url: 'https://kumii.africa/calendar' },
+    { id: 'files', icon: 'bi-folder', label: 'Files', badge: null, url: 'https://kumii.africa/files' },
+    { id: 'briefcase', icon: 'bi-briefcase', label: 'Briefcase', badge: null, url: 'hhttps://kumii.africa/copilot' },
+    { id: 'apps', icon: 'bi-grid-3x3-gap', label: 'Apps', badge: null, highlight: true, url: 'https://kumii.africa/edit-profile' },
+    { id: 'support', icon: 'bi-three-dots', label: 'More', badge: null, url: 'https://kumii.africa/edit-profile' },
   ];
 
   const gatewayItems = [
-    { id: 'capital', icon: 'bi-graph-up-arrow', label: 'Access To Capital', active: false },
-    { id: 'market', icon: 'bi-graph-up-arrow', label: 'Access To Market', active: true },
-    { id: 'advisory', icon: 'bi-graph-up-arrow', label: 'Expert Advisory', active: false },
-    { id: 'mentorship', icon: 'bi-graph-up-arrow', label: 'Mentorship', active: false },
-    { id: 'tools', icon: 'bi-graph-up-arrow', label: 'Business Tools', active: false },
-    { id: 'resources', icon: 'bi-graph-up-arrow', label: 'Resources Hub', active: false },
+    { id: 'capital', icon: 'bi-graph-up-arrow', label: 'Access To Capital', active: false, url: 'https://kumii.africa/funding' },
+    { id: 'market', icon: 'bi-graph-up-arrow', label: 'Access To Market', active: true, url: null }, // Current page, no external link
+    { id: 'advisory', icon: 'bi-graph-up-arrow', label: 'Expert Advisory', active: false, url: 'https://kumii.africa/find-advisor' },
+    { id: 'mentorship', icon: 'bi-graph-up-arrow', label: 'Mentorship', active: false, url: 'https://kumii.africa/mentorship' },
+    { id: 'tools', icon: 'bi-graph-up-arrow', label: 'Business Tools', active: false, url: 'https://kumii.africa/services/category/software-services' },
+    { id: 'resources', icon: 'bi-graph-up-arrow', label: 'Resources Hub', active: false, url: 'https://kumii.africa/resources' },
   ];
 
   const marketTools = [
@@ -38,17 +38,19 @@ function Sidebar({ currentSection, onSectionChange }) {
         {/* Main Navigation */}
         <nav className="sidebar-nav">
           {mainNavItems.map(item => (
-            <button
+            <a
               key={item.id}
+              href={item.url}
               className={`nav-item ${currentSection === item.id ? 'active' : ''} ${item.highlight ? 'highlight' : ''}`}
-              onClick={() => onSectionChange(item.id)}
+              target="_blank"
+              rel="noopener noreferrer"
               title={item.label}
             >
               <i className={`bi ${item.icon} nav-icon`}></i>
               {item.badge && (
                 <span className="nav-badge">{item.badge}</span>
               )}
-            </button>
+            </a>
           ))}
           
           <button 
@@ -85,16 +87,31 @@ function Sidebar({ currentSection, onSectionChange }) {
           <h3 className="section-title">Growth Gateway</h3>
           
           {gatewayItems.map(item => (
-            <button
-              key={item.id}
-              className={`gateway-item ${item.active ? 'active' : ''}`}
-              onClick={() => onSectionChange(item.id)}
-            >
-              <span className="gateway-icon">
-                <i className={`bi ${item.icon}`}></i>
-              </span>
-              <span className="gateway-label">{item.label}</span>
-            </button>
+            item.url ? (
+              <a
+                key={item.id}
+                href={item.url}
+                className={`gateway-item ${item.active ? 'active' : ''}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span className="gateway-icon">
+                  <i className={`bi ${item.icon}`}></i>
+                </span>
+                <span className="gateway-label">{item.label}</span>
+              </a>
+            ) : (
+              <button
+                key={item.id}
+                className={`gateway-item ${item.active ? 'active' : ''}`}
+                onClick={() => onSectionChange(item.id)}
+              >
+                <span className="gateway-icon">
+                  <i className={`bi ${item.icon}`}></i>
+                </span>
+                <span className="gateway-label">{item.label}</span>
+              </button>
+            )
           ))}
         </div>
 
