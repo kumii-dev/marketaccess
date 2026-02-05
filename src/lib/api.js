@@ -124,11 +124,22 @@ export const getTenderDocuments = (release) => {
   try {
     let allDocuments = [];
     
+    console.log('=== getTenderDocuments Debug ===');
+    console.log('Release OCID:', release?.ocid);
+    console.log('Has tender?', !!release?.tender);
+    console.log('Has tender.documents?', !!release?.tender?.documents);
+    console.log('Has planning?', !!release?.planning);
+    console.log('Has planning.documents?', !!release?.planning?.documents);
+    console.log('Has contracts?', !!release?.contracts);
+    console.log('Number of contracts:', release?.contracts?.length || 0);
+    
     // Helper function to add documents from an array
     const addDocuments = (docs, source = '') => {
       if (Array.isArray(docs)) {
+        console.log(`  -> Found ${docs.length} documents in ${source}`);
         docs.forEach(doc => {
           if (doc.url) {
+            console.log(`    - Adding: ${doc.title || 'Untitled'}`);
             allDocuments.push({
               id: doc.id || Math.random().toString(36).substr(2, 9),
               title: doc.title || doc.description || `${source} Document`,
@@ -184,6 +195,11 @@ export const getTenderDocuments = (release) => {
     const uniqueDocuments = allDocuments.filter((doc, index, self) =>
       index === self.findIndex((d) => d.url === doc.url)
     );
+    
+    console.log(`Total documents found: ${allDocuments.length}`);
+    console.log(`Unique documents: ${uniqueDocuments.length}`);
+    console.log('Final documents:', uniqueDocuments.map(d => `${d.source}: ${d.title}`));
+    console.log('=== End Debug ===\n');
     
     return uniqueDocuments;
   } catch (error) {
