@@ -49,7 +49,7 @@ app.get('/api/tenders', async (req, res) => {
     
     const response = await axios.get(baseUrl, { 
       params,
-      timeout: 30000, // 30 second timeout
+      timeout: 50000, // 50 second timeout
       headers: {
         'Accept': 'application/json'
       }

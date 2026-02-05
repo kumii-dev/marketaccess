@@ -12,7 +12,7 @@ function Sidebar({ currentSection, onSectionChange }) {
     { id: 'calendar', icon: 'bi-calendar', label: 'Calendar', badge: null, url: 'https://kumii.africa/calendar' },
     { id: 'calls', icon: 'bi-telephone', label: 'Calls', badge: null, url: 'https://kumii.africa/calendar' },
     { id: 'files', icon: 'bi-folder', label: 'Files', badge: null, url: 'https://kumii.africa/files' },
-    { id: 'briefcase', icon: 'bi-briefcase', label: 'Briefcase', badge: null, url: 'hhttps://kumii.africa/copilot' },
+    { id: 'briefcase', icon: 'bi-robot', label: 'Briefcase', badge: null, url: 'https://kumii.africa/copilot' },
     { id: 'apps', icon: 'bi-grid-3x3-gap', label: 'Apps', badge: null, highlight: true, url: 'https://kumii.africa/edit-profile' },
     { id: 'support', icon: 'bi-three-dots', label: 'More', badge: null, url: 'https://kumii.africa/edit-profile' },
   ];
