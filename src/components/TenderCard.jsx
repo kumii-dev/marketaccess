@@ -15,21 +15,18 @@ const TenderCard = ({ tender }) => {
   const documents = getTenderDocuments(tender);
   
   // Extract dates
-  const tenderPeriod = tender?.tender?.tenderPeriod || tender?.releases?.[0]?.tender?.tenderPeriod;
+  const tenderPeriod = tender?.tender?.tenderPeriod;
   const startDate = tenderPeriod?.startDate;
   const endDate = tenderPeriod?.endDate;
   
   // Extract buyer information
-  const buyer = tender?.buyer?.name || 
-                tender?.releases?.[0]?.buyer?.name || 
-                'Unknown Buyer';
+  const buyer = tender?.buyer?.name || 'Unknown Buyer';
   
   // Extract OCID
-  const ocid = tender?.ocid || tender?.releases?.[0]?.ocid || 'N/A';
+  const ocid = tender?.ocid || 'N/A';
   
   // Extract briefing session information
-  const briefingSession = tender?.tender?.briefingSession || 
-                         tender?.releases?.[0]?.tender?.briefingSession;
+  const briefingSession = tender?.tender?.briefingSession;
 
   const handleDownloadDocument = (url) => {
     if (url) {

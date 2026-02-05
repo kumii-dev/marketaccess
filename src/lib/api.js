@@ -99,10 +99,8 @@ export const fetchTenders = async ({
  */
 export const getTenderDocumentUrl = (release) => {
   try {
-    // Try to find tender documents in various possible locations
-    const documents = release?.tender?.documents || 
-                     release?.releases?.[0]?.tender?.documents ||
-                     [];
+    // The release parameter is already a single release object
+    const documents = release?.tender?.documents || [];
     
     // Find the main tender document
     const tenderDoc = documents.find(doc => 
@@ -145,22 +143,22 @@ export const getTenderDocuments = (release) => {
       }
     };
     
-    // Check in releases array first
-    const releaseData = release?.releases?.[0] || release;
+    // The release parameter is already a single release object from the releases array
+    // It has the structure: { ocid, tender, planning, contracts, awards, buyer, parties, etc. }
     
     // 1. Tender documents
-    if (releaseData?.tender?.documents) {
-      addDocuments(releaseData.tender.documents, 'Tender');
+    if (release?.tender?.documents) {
+      addDocuments(release.tender.documents, 'Tender');
     }
     
     // 2. Planning documents
-    if (releaseData?.planning?.documents) {
-      addDocuments(releaseData.planning.documents, 'Planning');
+    if (release?.planning?.documents) {
+      addDocuments(release.planning.documents, 'Planning');
     }
     
     // 3. Contract documents
-    if (releaseData?.contracts && Array.isArray(releaseData.contracts)) {
-      releaseData.contracts.forEach((contract, index) => {
+    if (release?.contracts && Array.isArray(release.contracts)) {
+      release.contracts.forEach((contract, index) => {
         // Contract documents
         if (contract.documents) {
           addDocuments(contract.documents, `Contract ${index + 1}`);
@@ -174,8 +172,8 @@ export const getTenderDocuments = (release) => {
     }
     
     // 4. Awards documents (if they have any)
-    if (releaseData?.awards && Array.isArray(releaseData.awards)) {
-      releaseData.awards.forEach((award, index) => {
+    if (release?.awards && Array.isArray(release.awards)) {
+      release.awards.forEach((award, index) => {
         if (award.documents) {
           addDocuments(award.documents, `Award ${index + 1}`);
         }
@@ -220,9 +218,7 @@ export const formatDate = (dateString) => {
  * @returns {string} Tender title
  */
 export const getTenderTitle = (release) => {
-  return release?.tender?.title || 
-         release?.releases?.[0]?.tender?.title || 
-         'Untitled Tender';
+  return release?.tender?.title || 'Untitled Tender';
 };
 
 /**
@@ -231,9 +227,7 @@ export const getTenderTitle = (release) => {
  * @returns {string} Tender description
  */
 export const getTenderDescription = (release) => {
-  return release?.tender?.description || 
-         release?.releases?.[0]?.tender?.description || 
-         'No description available';
+  return release?.tender?.description || 'No description available';
 };
 
 /**
@@ -242,9 +236,5 @@ export const getTenderDescription = (release) => {
  * @returns {Object|null} Value object with amount and currency
  */
 export const getTenderValue = (release) => {
-  const value = release?.tender?.value || 
-                release?.releases?.[0]?.tender?.value || 
-                null;
-  
-  return value;
+  return release?.tender?.value || null;
 };
