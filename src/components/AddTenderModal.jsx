@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { uploadMultipleTenderDocuments, formatFileSize, getFileIcon } from '../lib/supabase';
 import './AddTenderModal.css';
 
 const AddTenderModal = ({ isOpen, onClose, onAddTender }) => {
@@ -21,6 +22,8 @@ const AddTenderModal = ({ isOpen, onClose, onAddTender }) => {
   });
 
   const [documents, setDocuments] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [uploadProgress, setUploadProgress] = useState({ uploading: false, current: 0, total: 0 });
   const [errors, setErrors] = useState({});
 
   const provinces = [
@@ -84,6 +87,75 @@ const AddTenderModal = ({ isOpen, onClose, onAddTender }) => {
 
   const handleRemoveDocument = (docId) => {
     setDocuments(prev => prev.filter(doc => doc.id !== docId));
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files || []);
+    setSelectedFiles(files);
+    
+    // Clear any previous errors
+    setErrors(prev => ({ ...prev, files: null }));
+  };
+
+  const handleUploadFiles = async () => {
+    if (selectedFiles.length === 0) {
+      setErrors(prev => ({ ...prev, files: 'Please select files to upload' }));
+      return;
+    }
+
+    // Generate temporary OCID for file organization
+    const tempOcid = formData.ocid || `private-${crypto.randomUUID()}`;
+
+    try {
+      setUploadProgress({ uploading: true, current: 0, total: selectedFiles.length });
+
+      const results = await uploadMultipleTenderDocuments(
+        selectedFiles,
+        tempOcid,
+        (current, total) => {
+          setUploadProgress({ uploading: true, current, total });
+        }
+      );
+
+      // Add successfully uploaded files to documents list
+      const newDocs = results
+        .filter(result => result.success)
+        .map(result => ({
+          id: `doc-${Date.now()}-${Math.random()}`,
+          title: result.fileName,
+          url: result.publicUrl,
+          documentType: 'tenderNotice',
+          format: result.fileType,
+          source: 'Upload',
+          storagePath: result.path,
+          fileSize: result.fileSize
+        }));
+
+      setDocuments(prev => [...prev, ...newDocs]);
+
+      // Report any failures
+      const failures = results.filter(result => !result.success);
+      if (failures.length > 0) {
+        const failedNames = failures.map(f => f.fileName).join(', ');
+        setErrors(prev => ({
+          ...prev,
+          files: `Failed to upload: ${failedNames}`
+        }));
+      }
+
+      // Clear selected files
+      setSelectedFiles([]);
+      setUploadProgress({ uploading: false, current: 0, total: 0 });
+      
+      // Reset file input
+      const fileInput = document.getElementById('fileUpload');
+      if (fileInput) fileInput.value = '';
+
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      setErrors(prev => ({ ...prev, files: error.message || 'Failed to upload files' }));
+      setUploadProgress({ uploading: false, current: 0, total: 0 });
+    }
   };
 
   const validateForm = () => {
@@ -402,7 +474,62 @@ const AddTenderModal = ({ isOpen, onClose, onAddTender }) => {
           <div className="form-section">
             <h3>Documents</h3>
             
+            {/* File Upload Section */}
+            <div className="file-upload-section">
+              <h4><i className="bi bi-cloud-upload"></i> Upload Files</h4>
+              <p className="upload-hint">Upload tender documents from your computer (PDF, Word, Excel, Images - Max 10MB each)</p>
+              
+              <div className="file-input-group">
+                <input
+                  type="file"
+                  id="fileUpload"
+                  multiple
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+                  onChange={handleFileSelect}
+                  style={{ display: 'none' }}
+                />
+                <label htmlFor="fileUpload" className="file-select-btn">
+                  <i className="bi bi-folder2-open"></i>
+                  Choose Files
+                </label>
+                
+                {selectedFiles.length > 0 && (
+                  <div className="selected-files-info">
+                    <span>{selectedFiles.length} file(s) selected</span>
+                    <button
+                      type="button"
+                      className="upload-files-btn"
+                      onClick={handleUploadFiles}
+                      disabled={uploadProgress.uploading}
+                    >
+                      {uploadProgress.uploading ? (
+                        <>
+                          <i className="bi bi-hourglass-split"></i>
+                          Uploading {uploadProgress.current}/{uploadProgress.total}...
+                        </>
+                      ) : (
+                        <>
+                          <i className="bi bi-cloud-upload"></i>
+                          Upload Files
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              {errors.files && <span className="error-message">{errors.files}</span>}
+            </div>
+
+            <div className="divider">
+              <span>OR</span>
+            </div>
+
+            {/* URL Input Section */}
             <div className="document-input-group">
+              <h4><i className="bi bi-link-45deg"></i> Add by URL</h4>
+              <p className="upload-hint">Link to documents hosted elsewhere</p>
+              
               <div className="form-row">
                 <div className="form-group">
                   <label htmlFor="documentTitle">Document Title</label>
@@ -435,7 +562,7 @@ const AddTenderModal = ({ isOpen, onClose, onAddTender }) => {
                 onClick={handleAddDocument}
               >
                 <i className="bi bi-plus-circle"></i>
-                Add Document
+                Add Document URL
               </button>
               
               {errors.document && <span className="error-message">{errors.document}</span>}
@@ -446,12 +573,19 @@ const AddTenderModal = ({ isOpen, onClose, onAddTender }) => {
                 <h4>Added Documents ({documents.length})</h4>
                 {documents.map(doc => (
                   <div key={doc.id} className="document-item">
-                    <i className="bi bi-file-earmark-text"></i>
-                    <span className="document-title">{doc.title}</span>
+                    <i className={`bi ${getFileIcon(doc.format)}`}></i>
+                    <div className="document-info">
+                      <span className="document-title">{doc.title}</span>
+                      {doc.fileSize && (
+                        <span className="document-size">{formatFileSize(doc.fileSize)}</span>
+                      )}
+                      <span className="document-source">{doc.source}</span>
+                    </div>
                     <button
                       type="button"
                       className="remove-doc-btn"
                       onClick={() => handleRemoveDocument(doc.id)}
+                      title="Remove document"
                     >
                       <i className="bi bi-trash"></i>
                     </button>

@@ -206,17 +206,30 @@ export const updatePrivateTender = async (ocid, updates) => {
 
 /**
  * Delete a private tender from Supabase
+ * Also deletes all associated files from Supabase Storage
  * @param {string} ocid - Tender OCID
  * @returns {Promise<void>}
  */
 export const deletePrivateTender = async (ocid) => {
   try {
+    // First, delete all associated files from storage
+    try {
+      await deleteTenderDocuments(ocid);
+      console.log(`Deleted files for tender: ${ocid}`);
+    } catch (storageError) {
+      // Log but don't fail if storage deletion fails (files might not exist)
+      console.warn(`Could not delete files for tender ${ocid}:`, storageError.message);
+    }
+
+    // Then delete the tender record from database
     const { error } = await supabase
       .from('private_tenders')
       .delete()
       .eq('ocid', ocid);
 
     if (error) throw error;
+    
+    console.log(`Successfully deleted tender and files: ${ocid}`);
   } catch (error) {
     console.error('Error deleting private tender from Supabase:', error);
     throw error;
@@ -286,4 +299,195 @@ export const syncLocalStorageToSupabase = async (localTenders) => {
     console.error('Error syncing localStorage to Supabase:', error);
     throw error;
   }
+};
+
+/**
+ * SUPABASE STORAGE FUNCTIONS FOR DOCUMENT UPLOADS
+ */
+
+const STORAGE_BUCKET = 'tender-documents';
+
+/**
+ * Upload a file to Supabase Storage
+ * @param {File} file - File object to upload
+ * @param {string} tenderOcid - Tender OCID for organizing files
+ * @param {Function} onProgress - Optional callback for upload progress
+ * @returns {Promise<Object>} Object with publicUrl and path
+ */
+export const uploadTenderDocument = async (file, tenderOcid, onProgress = null) => {
+  try {
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    // Validate file type
+    const allowedTypes = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'image/jpeg',
+      'image/png',
+      'image/gif'
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      throw new Error('Invalid file type. Please upload PDF, Word, Excel, or image files.');
+    }
+
+    // Validate file size (max 10MB)
+    const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+    if (file.size > maxSize) {
+      throw new Error('File size exceeds 10MB limit');
+    }
+
+    // Generate unique filename
+    const fileExt = file.name.split('.').pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${tenderOcid}/${fileName}`;
+
+    // Upload file to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false
+      });
+
+    if (error) throw error;
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(STORAGE_BUCKET)
+      .getPublicUrl(filePath);
+
+    return {
+      path: filePath,
+      publicUrl: urlData.publicUrl,
+      fileName: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    };
+  } catch (error) {
+    console.error('Error uploading file to Supabase Storage:', error);
+    throw error;
+  }
+};
+
+/**
+ * Upload multiple files to Supabase Storage
+ * @param {FileList|Array<File>} files - Files to upload
+ * @param {string} tenderOcid - Tender OCID
+ * @param {Function} onProgress - Optional callback for overall progress
+ * @returns {Promise<Array>} Array of upload results
+ */
+export const uploadMultipleTenderDocuments = async (files, tenderOcid, onProgress = null) => {
+  try {
+    const fileArray = Array.from(files);
+    const results = [];
+    const total = fileArray.length;
+
+    for (let i = 0; i < fileArray.length; i++) {
+      const file = fileArray[i];
+      
+      try {
+        const result = await uploadTenderDocument(file, tenderOcid);
+        results.push({
+          success: true,
+          fileName: file.name,
+          ...result
+        });
+      } catch (error) {
+        results.push({
+          success: false,
+          fileName: file.name,
+          error: error.message
+        });
+      }
+
+      // Report progress
+      if (onProgress) {
+        onProgress(i + 1, total);
+      }
+    }
+
+    return results;
+  } catch (error) {
+    console.error('Error uploading multiple files:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a document from Supabase Storage
+ * @param {string} filePath - Path to the file in storage
+ * @returns {Promise<void>}
+ */
+export const deleteTenderDocument = async (filePath) => {
+  try {
+    const { error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .remove([filePath]);
+
+    if (error) throw error;
+  } catch (error) {
+    console.error('Error deleting file from Supabase Storage:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete all documents for a tender
+ * @param {string} tenderOcid - Tender OCID
+ * @returns {Promise<void>}
+ */
+export const deleteTenderDocuments = async (tenderOcid) => {
+  try {
+    // List all files in the tender's folder
+    const { data: files, error: listError } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list(tenderOcid);
+
+    if (listError) throw listError;
+
+    if (files && files.length > 0) {
+      // Delete all files
+      const filePaths = files.map(file => `${tenderOcid}/${file.name}`);
+      const { error: deleteError } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .remove(filePaths);
+
+      if (deleteError) throw deleteError;
+    }
+  } catch (error) {
+    console.error('Error deleting tender documents:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get file size in human-readable format
+ * @param {number} bytes - File size in bytes
+ * @returns {string} Formatted size string
+ */
+export const formatFileSize = (bytes) => {
+  if (bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+};
+
+/**
+ * Get file icon based on file type
+ * @param {string} fileType - MIME type
+ * @returns {string} Bootstrap icon class
+ */
+export const getFileIcon = (fileType) => {
+  if (fileType.includes('pdf')) return 'bi-file-earmark-pdf';
+  if (fileType.includes('word')) return 'bi-file-earmark-word';
+  if (fileType.includes('excel') || fileType.includes('spreadsheet')) return 'bi-file-earmark-excel';
+  if (fileType.includes('image')) return 'bi-file-earmark-image';
+  return 'bi-file-earmark-text';
 };

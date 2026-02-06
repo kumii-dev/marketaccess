@@ -286,6 +286,142 @@
   background-color: var(--lime-green, #7A9179);
 }
 
+/* File Upload Styles */
+.file-upload-section {
+  background: #f9fafb;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1.5rem;
+}
+
+.file-upload-section h4 {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.upload-hint {
+  font-size: 0.8125rem;
+  color: #6b7280;
+  margin-bottom: 1rem;
+}
+
+.file-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.file-select-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background-color: white;
+  border: 2px dashed #d1d5db;
+  color: #374151;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: fit-content;
+}
+
+.file-select-btn:hover {
+  border-color: var(--olive-green, #6B7C5D);
+  background-color: #f9fafb;
+  color: var(--olive-green, #6B7C5D);
+}
+
+.selected-files-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.selected-files-info span {
+  font-size: 0.875rem;
+  color: #374151;
+  flex: 1;
+}
+
+.upload-files-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background-color: var(--olive-green, #6B7C5D);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.upload-files-btn:hover:not(:disabled) {
+  background-color: var(--lime-green, #7A9179);
+}
+
+.upload-files-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.divider {
+  text-align: center;
+  position: relative;
+  margin: 1.5rem 0;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 100%;
+  height: 1px;
+  background: #e5e7eb;
+}
+
+.divider span {
+  position: relative;
+  background: white;
+  padding: 0 1rem;
+  color: #9ca3af;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.document-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.document-size,
+.document-source {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.document-source {
+  font-style: italic;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .modal-content {
