@@ -20,6 +20,41 @@ export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
   }
 });
 
+// Storage bucket name
+const STORAGE_BUCKET = 'tender-documents';
+
+/**
+ * Test storage bucket connection
+ * @returns {Promise<Object>} Connection test results
+ */
+export const testStorageBucket = async () => {
+  try {
+    const { data, error } = await supabase.storage
+      .from(STORAGE_BUCKET)
+      .list('', { limit: 1 });
+
+    if (error) {
+      return {
+        success: false,
+        error: error.message,
+        details: error
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Storage bucket is accessible',
+      bucket: STORAGE_BUCKET
+    };
+  } catch (err) {
+    return {
+      success: false,
+      error: err.message,
+      details: err
+    };
+  }
+};
+
 /**
  * Database helper functions for private tenders
  */
@@ -305,8 +340,6 @@ export const syncLocalStorageToSupabase = async (localTenders) => {
  * SUPABASE STORAGE FUNCTIONS FOR DOCUMENT UPLOADS
  */
 
-const STORAGE_BUCKET = 'tender-documents';
-
 /**
  * Upload a file to Supabase Storage
  * @param {File} file - File object to upload
@@ -318,6 +351,11 @@ export const uploadTenderDocument = async (file, tenderOcid, onProgress = null) 
   try {
     if (!file) {
       throw new Error('No file provided');
+    }
+
+    // Check if Supabase is configured
+    if (!supabase) {
+      throw new Error('Supabase client not initialized. Please check your configuration.');
     }
 
     // Validate file type
@@ -333,13 +371,13 @@ export const uploadTenderDocument = async (file, tenderOcid, onProgress = null) 
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      throw new Error('Invalid file type. Please upload PDF, Word, Excel, or image files.');
+      throw new Error(`Invalid file type: ${file.type}. Please upload PDF, Word, Excel, or image files.`);
     }
 
     // Validate file size (max 10MB)
     const maxSize = 10 * 1024 * 1024; // 10MB in bytes
     if (file.size > maxSize) {
-      throw new Error('File size exceeds 10MB limit');
+      throw new Error(`File size (${formatFileSize(file.size)}) exceeds 10MB limit`);
     }
 
     // Generate unique filename
@@ -355,7 +393,10 @@ export const uploadTenderDocument = async (file, tenderOcid, onProgress = null) 
         upsert: false
       });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase upload error:', error);
+      throw new Error(`Upload failed: ${error.message || 'Unknown error'}`);
+    }
 
     // Get public URL
     const { data: urlData } = supabase.storage
