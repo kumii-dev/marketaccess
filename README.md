@@ -12,6 +12,9 @@ A production-ready React web application that fetches and displays South African
 - 📊 **Pagination**: Efficient browsing through large datasets
 - ⚡ **Error Handling**: Robust error handling with retry functionality
 - 🌐 **API Proxy**: Express backend to handle API requests efficiently
+- 📝 **Private Tenders**: Add and manage private sector tender opportunities
+- ☁️ **Cloud Storage**: Supabase integration for persistent data storage
+- 🔄 **Auto-Sync**: Automatic sync between localStorage and cloud database
 
 ## Tech Stack
 
@@ -19,12 +22,14 @@ A production-ready React web application that fetches and displays South African
 - **React 19** - UI framework
 - **Vite 7** - Build tool and dev server
 - **Axios** - HTTP client
+- **Supabase** - Backend-as-a-Service for data storage
 - **CSS3** - Styling with modern features
 
 ### Backend
 - **Node.js** - Runtime environment
 - **Express 5** - Web server framework
 - **CORS** - Cross-origin resource sharing
+- **Supabase** - PostgreSQL database and API
 
 ## Project Structure
 
@@ -56,12 +61,13 @@ marketaccess/
 
 - Node.js 18+ and npm installed
 - Internet connection to access the National Treasury eTenders API
+- Supabase account (free tier) for private tenders feature
 
 ### Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/Khulekani-22/marketaccess.git
+git clone https://github.com/kumii-dev/marketaccess.git
 cd marketaccess
 ```
 
@@ -69,6 +75,21 @@ cd marketaccess
 ```bash
 npm install
 ```
+
+3. Set up environment variables:
+```bash
+cp .env.example .env
+```
+
+Edit `.env` and add your Supabase credentials (see [SUPABASE-SETUP.md](./SUPABASE-SETUP.md) for details):
+```bash
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+4. Set up Supabase database (first time only):
+   - Follow the guide in [SUPABASE-SETUP.md](./SUPABASE-SETUP.md)
+   - Run the SQL schema in your Supabase project
 
 ### Running the Application
 
@@ -86,9 +107,9 @@ The server will run on `http://localhost:3001`
 ```bash
 npm run dev
 ```
-The frontend will run on `http://localhost:5173`
+The frontend will run on `http://localhost:5174`
 
-3. Open your browser and navigate to `http://localhost:5173`
+3. Open your browser and navigate to `http://localhost:5174`
 
 #### Production Build
 

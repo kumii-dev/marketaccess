@@ -1,14 +1,22 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import TenderCard from './TenderCard';
 import FilterBar from './FilterBar';
 import Pagination from './Pagination';
 import AddTenderModal from './AddTenderModal';
+import { 
+  fetchPrivateTenders, 
+  addPrivateTender, 
+  deletePrivateTender,
+  syncLocalStorageToSupabase 
+} from '../lib/supabase';
 import './PrivateTendersPage.css';
 
 const PrivateTendersPage = () => {
   const [privateTenders, setPrivateTenders] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filters, setFilters] = useState({
     search: '',
     province: '',
@@ -20,39 +28,110 @@ const PrivateTendersPage = () => {
 
   const itemsPerPage = 250;
 
-  // Load private tenders from localStorage on mount
-  useState(() => {
-    const saved = localStorage.getItem('privateTenders');
-    if (saved) {
-      try {
-        setPrivateTenders(JSON.parse(saved));
-      } catch (error) {
-        console.error('Error loading private tenders:', error);
-      }
-    }
-  });
+  // Load private tenders from Supabase on mount
+  useEffect(() => {
+    loadTenders();
+  }, []);
 
-  // Save to localStorage whenever tenders change
-  const saveToLocalStorage = (tenders) => {
+  const loadTenders = async () => {
     try {
+      setIsLoading(true);
+      setError(null);
+
+      // Try to sync any existing localStorage data first
+      const localData = localStorage.getItem('privateTenders');
+      if (localData) {
+        try {
+          const localTenders = JSON.parse(localData);
+          await syncLocalStorageToSupabase(localTenders);
+          console.log('Successfully synced localStorage data to Supabase');
+        } catch (syncError) {
+          console.warn('Could not sync localStorage data:', syncError);
+        }
+      }
+
+      // Fetch from Supabase
+      const tenders = await fetchPrivateTenders();
+      setPrivateTenders(tenders);
+      
+      // Keep localStorage as backup
       localStorage.setItem('privateTenders', JSON.stringify(tenders));
-    } catch (error) {
-      console.error('Error saving private tenders:', error);
+    } catch (err) {
+      console.error('Error loading tenders:', err);
+      setError('Failed to load tenders. Please check your internet connection.');
+      
+      // Fallback to localStorage if Supabase fails
+      const saved = localStorage.getItem('privateTenders');
+      if (saved) {
+        try {
+          setPrivateTenders(JSON.parse(saved));
+          console.log('Loaded tenders from localStorage backup');
+        } catch (parseError) {
+          console.error('Error parsing localStorage data:', parseError);
+        }
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleAddTender = (newTender) => {
-    const updatedTenders = [newTender, ...privateTenders];
-    setPrivateTenders(updatedTenders);
-    saveToLocalStorage(updatedTenders);
-    setCurrentPage(1);
+  const handleAddTender = async (newTender) => {
+    try {
+      setError(null);
+      
+      // Add to Supabase
+      const createdTender = await addPrivateTender(newTender);
+      
+      // Update local state
+      const updatedTenders = [createdTender, ...privateTenders];
+      setPrivateTenders(updatedTenders);
+      
+      // Update localStorage backup
+      localStorage.setItem('privateTenders', JSON.stringify(updatedTenders));
+      
+      setCurrentPage(1);
+      
+      // Show success message (optional)
+      console.log('Tender added successfully to Supabase');
+    } catch (err) {
+      console.error('Error adding tender:', err);
+      setError('Failed to add tender. Please try again.');
+      
+      // Fallback to localStorage only if Supabase fails
+      const updatedTenders = [newTender, ...privateTenders];
+      setPrivateTenders(updatedTenders);
+      localStorage.setItem('privateTenders', JSON.stringify(updatedTenders));
+      setCurrentPage(1);
+    }
   };
 
-  const handleDeleteTender = (ocid) => {
-    if (window.confirm('Are you sure you want to delete this tender?')) {
+  const handleDeleteTender = async (ocid) => {
+    if (!window.confirm('Are you sure you want to delete this tender?')) {
+      return;
+    }
+
+    try {
+      setError(null);
+      
+      // Delete from Supabase
+      await deletePrivateTender(ocid);
+      
+      // Update local state
       const updatedTenders = privateTenders.filter(t => t.ocid !== ocid);
       setPrivateTenders(updatedTenders);
-      saveToLocalStorage(updatedTenders);
+      
+      // Update localStorage backup
+      localStorage.setItem('privateTenders', JSON.stringify(updatedTenders));
+      
+      console.log('Tender deleted successfully from Supabase');
+    } catch (err) {
+      console.error('Error deleting tender:', err);
+      setError('Failed to delete tender. Please try again.');
+      
+      // Fallback: delete from localStorage anyway
+      const updatedTenders = privateTenders.filter(t => t.ocid !== ocid);
+      setPrivateTenders(updatedTenders);
+      localStorage.setItem('privateTenders', JSON.stringify(updatedTenders));
     }
   };
 
@@ -181,16 +260,56 @@ const PrivateTendersPage = () => {
 
       <main className="private-main">
         <div className="container">
+          {error && (
+            <div className="error-banner" style={{
+              padding: '1rem',
+              marginBottom: '1rem',
+              backgroundColor: '#fee',
+              border: '1px solid #fcc',
+              borderRadius: '8px',
+              color: '#c33'
+            }}>
+              <i className="bi bi-exclamation-triangle"></i> {error}
+              <button 
+                onClick={() => loadTenders()}
+                style={{
+                  marginLeft: '1rem',
+                  padding: '0.25rem 0.75rem',
+                  backgroundColor: '#fff',
+                  border: '1px solid #c33',
+                  borderRadius: '4px',
+                  color: '#c33',
+                  cursor: 'pointer'
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          
           <FilterBar
             onFilterChange={handleFilterChange}
             totalCount={privateTenders.length}
             visibleCount={filteredAndSortedTenders.length}
-            isLoading={false}
+            isLoading={isLoading}
             tenders={privateTenders}
             hideDateRange={true}
           />
 
-          {privateTenders.length === 0 ? (
+          {isLoading ? (
+            <div className="loading-state" style={{ textAlign: 'center', padding: '3rem' }}>
+              <div className="spinner" style={{
+                border: '4px solid #f3f3f3',
+                borderTop: '4px solid #6B7C5D',
+                borderRadius: '50%',
+                width: '50px',
+                height: '50px',
+                animation: 'spin 1s linear infinite',
+                margin: '0 auto 1rem'
+              }}></div>
+              <p>Loading private tenders...</p>
+            </div>
+          ) : privateTenders.length === 0 ? (
             <div className="empty-state">
               <i className="bi bi-inbox"></i>
               <h2>No Private Tenders Yet</h2>
