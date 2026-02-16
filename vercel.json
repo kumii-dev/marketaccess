@@ -23,6 +23,15 @@
       "dest": "/dist/$1"
     }
   ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "ALLOW-FROM https://kumii.africa" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://kumii.africa https://*.lovable.app" }
+      ]
+    }
+  ],
   "env": {
     "PORT": "3001"
   }
