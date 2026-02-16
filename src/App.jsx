@@ -249,11 +249,11 @@ function App() {
   // Default: Render Government Tenders page
   return (
     <div className="app">
-      <TopNavbar />
-      <Sidebar 
+      {/* <TopNavbar /> */}
+      {/* <Sidebar 
         currentSection={currentSection} 
         onSectionChange={handleSectionChange}
-      />
+      /> */}
       <header className="app-header">
         <div className="container">
           <h1 style={{fontSize: '4rem', fontWeight: 700, lineHeight: '1.1'}} className="app-title">Access To Market</h1>

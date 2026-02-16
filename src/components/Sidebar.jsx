@@ -36,7 +36,7 @@ function Sidebar({ currentSection, onSectionChange }) {
       {/* Top Section - Main Navigation */}
       <div className="sidebar-top">
         {/* Main Navigation */}
-        <nav className="sidebar-nav">
+        <nav  className="sidebar-nav" >
           {mainNavItems.map(item => (
             <a
               key={item.id}

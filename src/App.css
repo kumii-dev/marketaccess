@@ -3,8 +3,8 @@
   display: flex;
   flex-direction: column;
   background: var(--gray-light);
-  margin-left: calc(115px + 19rem); /* Space for sidebar (115px + 19rem content panel) */
-  margin-top: 60px; /* Space for top navbar */
+  margin-left: 0; /* Remove sidebar space */
+  margin-top: 0; /* Remove top navbar space */
   transition: margin-left 0.3s ease;
 }
 
