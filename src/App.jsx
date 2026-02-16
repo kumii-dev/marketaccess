@@ -266,6 +266,9 @@ function App() {
             <button className="header-btn header-btn-primary" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>
               Browse Opportunities
             </button>
+            <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
+              Private Tenders
+            </button>
             <button className="header-btn header-btn-secondary">
              Dashboard
             </button>
