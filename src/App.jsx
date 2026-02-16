@@ -236,11 +236,11 @@ function App() {
   if (currentSection === 'private-tenders') {
     return (
       <div className="app">
-        <TopNavbar />
-        <Sidebar 
+        {/* <TopNavbar /> */}
+        {/* <Sidebar 
           currentSection={currentSection} 
           onSectionChange={handleSectionChange}
-        />
+        /> */}
         <PrivateTendersPage />
       </div>
     );
