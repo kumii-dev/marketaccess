@@ -24,7 +24,7 @@
       "source": "/(.*)",
       "headers": [
         { "key": "X-Frame-Options", "value": "ALLOW-FROM https://kumii.africa" },
-        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://kumii.africa https://*.lovable.app" }
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://kumii.africa https://*.lovable.app https://*.lovableproject.com" }
       ]
     }
   ],
