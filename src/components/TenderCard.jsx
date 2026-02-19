@@ -42,15 +42,31 @@ const TenderCard = ({ tender }) => {
       const isInIframe = window.self !== window.top;
       
       if (isInIframe) {
-        // If in iframe, try to open in parent window (top level)
+        console.log('App is embedded in iframe, attempting to open in parent window');
+        // Try to open in parent window
         try {
-          // This will work if parent allows access
-          window.top.open(url, '_blank', 'noopener,noreferrer');
-          console.log('Opened document in parent window');
+          const opened = window.top.open(url, '_blank', 'noopener,noreferrer');
+          if (!opened || opened.closed || typeof opened.closed === 'undefined') {
+            console.warn('Popup blocked or failed, trying alternative method');
+            // If blocked, create a link and click it
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_top'; // Open in parent frame
+            link.rel = 'noopener noreferrer';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
         } catch (e) {
-          // If cross-origin iframe, fallback to current window
-          console.warn('Cannot access parent window, opening in current context:', e);
-          window.open(url, '_blank', 'noopener,noreferrer');
+          console.warn('Cannot access parent window (cross-origin):', e);
+          // Cross-origin iframe, use link method with _blank
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         }
       } else {
         // Not in iframe, use standard approach
@@ -75,8 +91,14 @@ const TenderCard = ({ tender }) => {
       }
     } catch (error) {
       console.error('Error downloading document:', error);
-      // Final fallback
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Final fallback - just create a link and click it
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   };
 
