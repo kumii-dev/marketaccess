@@ -35,29 +35,47 @@ const TenderCard = ({ tender }) => {
       return;
     }
 
+    console.log('Opening document:', url);
+    
     try {
-      // Create a temporary anchor element for download
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
+      // Check if we're in an iframe
+      const isInIframe = window.self !== window.top;
       
-      // Try to trigger download attribute if same origin
-      try {
-        const urlObj = new URL(url);
-        if (urlObj.origin === window.location.origin) {
-          link.download = '';
+      if (isInIframe) {
+        // If in iframe, try to open in parent window (top level)
+        try {
+          // This will work if parent allows access
+          window.top.open(url, '_blank', 'noopener,noreferrer');
+          console.log('Opened document in parent window');
+        } catch (e) {
+          // If cross-origin iframe, fallback to current window
+          console.warn('Cannot access parent window, opening in current context:', e);
+          window.open(url, '_blank', 'noopener,noreferrer');
         }
-      } catch {
-        // External URL, just open in new tab
+      } else {
+        // Not in iframe, use standard approach
+        const link = document.createElement('a');
+        link.href = url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        
+        // Try to trigger download attribute if same origin
+        try {
+          const urlObj = new URL(url);
+          if (urlObj.origin === window.location.origin) {
+            link.download = '';
+          }
+        } catch {
+          // External URL, just open in new tab
+        }
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
       }
-      
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
     } catch (error) {
       console.error('Error downloading document:', error);
-      // Fallback to window.open
+      // Final fallback
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
