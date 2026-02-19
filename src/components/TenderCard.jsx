@@ -29,7 +29,35 @@ const TenderCard = ({ tender }) => {
   const briefingSession = tender?.tender?.briefingSession;
 
   const handleDownloadDocument = (url) => {
-    if (url) {
+    if (!url) {
+      console.error('No URL provided for document download');
+      alert('Document URL is missing');
+      return;
+    }
+
+    try {
+      // Create a temporary anchor element for download
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      
+      // Try to trigger download attribute if same origin
+      try {
+        const urlObj = new URL(url);
+        if (urlObj.origin === window.location.origin) {
+          link.download = '';
+        }
+      } catch {
+        // External URL, just open in new tab
+      }
+      
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      // Fallback to window.open
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
@@ -40,11 +68,14 @@ const TenderCard = ({ tender }) => {
       return;
     }
     
+    console.log(`Downloading ${documents.length} documents...`);
+    
     // Open all documents in new tabs with a slight delay to prevent popup blocking
     documents.forEach((doc, index) => {
       setTimeout(() => {
-        window.open(doc.url, '_blank', 'noopener,noreferrer');
-      }, index * 200); // 200ms delay between each document
+        console.log(`Opening document ${index + 1}:`, doc.title, doc.url);
+        handleDownloadDocument(doc.url);
+      }, index * 300); // 300ms delay between each document
     });
   };
 
