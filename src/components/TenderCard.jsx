@@ -93,14 +93,14 @@ const TenderCard = ({ tender }) => {
         
         {startDate && (
           <div className="tender-info-row">
-            <span className="info-label">Start Date:</span>
+            <span className="info-label">Opening Date:</span>
             <span className="info-value">{formatDate(startDate)}</span>
           </div>
         )}
         
         {endDate && (
           <div className="tender-info-row">
-            <span className="info-label">End Date:</span>
+            <span className="info-label">Closing Date:</span>
             <span className="info-value">{formatDate(endDate)}</span>
           </div>
         )}

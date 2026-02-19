@@ -15,11 +15,11 @@
   -moz-osx-font-smoothing: grayscale;
 
   /* Color variables matching the Access To Capital design */
-  --sage-green: #8FA68E;
-  --sage-green-light: #A8BBA7;
-  --sage-green-dark: #7A9179;
-  --olive-green: #7A9179;
-  --lime-green: #A8C686;
+  --sage-green: #c5df96;
+  --sage-green-light: #c5df96;
+  --sage-green-dark: #7a8567;
+  --olive-green: #7a8567;
+  --lime-green: #c5df96;
   --orange: #E67E50;
   --orange-hover: #D46D41;
   --gray-light: #F5F5F3;
