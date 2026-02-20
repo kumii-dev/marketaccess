@@ -37,23 +37,39 @@ const TenderCard = ({ tender }) => {
 
     console.log('Opening document:', url);
     
-    // Create a temporary anchor element and click it
-    // This works better in iframes than window.open()
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
+    // Check if we're in an iframe
+    const isInIframe = window !== window.top;
     
-    // Add to DOM temporarily (required for some browsers)
-    document.body.appendChild(link);
-    
-    // Trigger click
-    link.click();
-    
-    // Clean up
-    setTimeout(() => {
-      document.body.removeChild(link);
-    }, 100);
+    if (isInIframe) {
+      try {
+        // Try to open in parent window
+        window.top.open(url, '_blank', 'noopener,noreferrer');
+        console.log('Opened in parent window');
+      } catch (error) {
+        console.error('Failed to open in parent window:', error);
+        // Fallback: try to navigate parent window directly
+        try {
+          window.top.location.href = url;
+        } catch (e) {
+          console.error('Failed to navigate parent window:', e);
+          // Last resort: open in current context
+          window.location.href = url;
+        }
+      }
+    } else {
+      // Not in iframe, use standard approach
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      
+      document.body.appendChild(link);
+      link.click();
+      
+      setTimeout(() => {
+        document.body.removeChild(link);
+      }, 100);
+    }
   };
 
   const handleDownloadAll = () => {
