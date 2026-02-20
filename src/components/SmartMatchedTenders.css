@@ -834,3 +834,61 @@
   --orange: #ff9800;
 }
 
+/* ============================================
+   Progressive Loading Indicator
+   ============================================ */
+
+.loading-more-notice {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, rgba(33, 150, 243, 0.05) 0%, rgba(76, 175, 80, 0.05) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(33, 150, 243, 0.2);
+}
+
+.loading-more-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.loading-more-content i {
+  font-size: 1.5rem;
+  color: var(--blue);
+}
+
+.loading-more-content i.spinning {
+  animation: spin 1.5s linear infinite;
+}
+
+.loading-more-content > span:first-of-type {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--blue);
+}
+
+.progress-bar-container {
+  width: 100%;
+  max-width: 400px;
+  height: 8px;
+  background: rgba(33, 150, 243, 0.1);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue) 0%, var(--sage-green) 100%);
+  border-radius: 10px;
+  transition: width 0.5s ease-in-out;
+  box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+}
+
+.progress-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+

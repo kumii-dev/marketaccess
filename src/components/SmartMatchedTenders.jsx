@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { fetchTenders } from '../lib/api';
 import { batchAnalyzeMatches, generatePortfolioSummary } from '../utils/openaiService';
+import { getCachedTenders, cacheTenders, getCacheInfo } from '../utils/tenderCache';
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -13,6 +14,8 @@ const SmartMatchedTenders = () => {
   const [matchedTenders, setMatchedTenders] = useState([]);
   const [filteredTenders, setFilteredTenders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 0, percentage: 0 });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [isWaitingForAuth, setIsWaitingForAuth] = useState(true);
   const [matchingScore, setMatchingScore] = useState({});
@@ -62,7 +65,7 @@ const SmartMatchedTenders = () => {
     const fetchProfileAndTenders = async () => {
       setLoading(true);
       setError(null);
-
+      
       try {
         // Fetch profile data
         const profileResponse = await fetch(
@@ -84,50 +87,148 @@ const SmartMatchedTenders = () => {
         console.log('Profile data received:', profile);
         setProfileData(profile);
 
-        // Fetch public government tenders (last 30 days)
+        // Date range setup
         const today = new Date();
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(today.getDate() - 30);
+        const dateFrom = thirtyDaysAgo.toISOString().split('T')[0];
+        const dateTo = today.toISOString().split('T')[0];
 
-        const tendersData = await fetchTenders({
-          page: 1,
-          limit: 500,
-          dateFrom: thirtyDaysAgo.toISOString().split('T')[0],
-          dateTo: today.toISOString().split('T')[0]
-        });
-
-        let tenders = [];
-        if (tendersData.results) {
-          tenders = tendersData.results;
-        } else if (tendersData.data) {
-          tenders = tendersData.data;
-        } else if (Array.isArray(tendersData)) {
-          tenders = tendersData;
+        // Check cache first
+        const cachedTenders = getCachedTenders(dateFrom, dateTo);
+        const cacheInfo = getCacheInfo();
+        
+        if (cachedTenders && cachedTenders.length > 0) {
+          console.log('⚡ Using cached tenders:', cacheInfo);
+          setAllTenders(cachedTenders);
+          const cachedMatched = matchTendersToProfile(cachedTenders, profile);
+          setMatchedTenders(cachedMatched);
+          setLoading(false);
+          
+          // Still enhance with AI in background
+          if (cachedMatched.length > 0) {
+            enhanceWithAI(cachedMatched, profile);
+          }
+          return; // Skip fetching
         }
 
-        setAllTenders(tenders);
+        // PHASE 1: Quick initial load (50 tenders)
+        console.log('🚀 Phase 1: Loading initial 50 tenders...');
+        const initialData = await fetchTenders({
+          page: 1,
+          limit: 50,
+          dateFrom,
+          dateTo
+        });
 
-        // Smart match tenders based on profile
-        const matched = matchTendersToProfile(tenders, profile);
-        setMatchedTenders(matched);
+        let initialTenders = [];
+        if (initialData.results) {
+          initialTenders = initialData.results;
+        } else if (initialData.data) {
+          initialTenders = initialData.data;
+        } else if (Array.isArray(initialData)) {
+          initialTenders = initialData;
+        }
 
-        // Enhance top matches with AI analysis (run in background)
-        if (matched.length > 0) {
-          enhanceWithAI(matched, profile);
+        // Show initial matches immediately
+        if (initialTenders.length > 0) {
+          setAllTenders(initialTenders);
+          const initialMatched = matchTendersToProfile(initialTenders, profile);
+          setMatchedTenders(initialMatched);
+          setLoadingProgress({ current: 50, total: 250, percentage: 20 });
+          
+          console.log(`✅ Initial ${initialTenders.length} tenders loaded and matched`);
+        }
+
+        // Initial loading complete - user can see results now
+        setLoading(false);
+
+        // PHASE 2: Progressive background loading (200 more tenders in batches)
+        console.log('🔄 Phase 2: Loading additional tenders in background...');
+        setIsLoadingMore(true);
+        
+        const batches = [
+          { page: 2, limit: 50 }, // 51-100
+          { page: 3, limit: 50 }, // 101-150
+          { page: 4, limit: 50 }, // 151-200
+          { page: 5, limit: 50 }  // 201-250
+        ];
+
+        for (let i = 0; i < batches.length; i++) {
+          const batch = batches[i];
+          
+          try {
+            const batchData = await fetchTenders({
+              page: batch.page,
+              limit: batch.limit,
+              dateFrom,
+              dateTo
+            });
+
+            let batchTenders = [];
+            if (batchData.results) {
+              batchTenders = batchData.results;
+            } else if (batchData.data) {
+              batchTenders = batchData.data;
+            } else if (Array.isArray(batchData)) {
+              batchTenders = batchData;
+            }
+
+            if (batchTenders.length > 0) {
+              // Append new tenders
+              setAllTenders(prev => {
+                const combined = [...prev, ...batchTenders];
+                // Re-match with all tenders so far
+                const newMatched = matchTendersToProfile(combined, profile);
+                setMatchedTenders(newMatched);
+                
+                // Cache the combined result after last batch
+                if (i === batches.length - 1) {
+                  cacheTenders(combined, dateFrom, dateTo);
+                }
+                
+                return combined;
+              });
+
+              const currentCount = 50 + (i + 1) * 50;
+              const percentage = Math.round((currentCount / 250) * 100);
+              setLoadingProgress({ current: currentCount, total: 250, percentage });
+              
+              console.log(`📦 Batch ${i + 1}/4 loaded: +${batchTenders.length} tenders (Total: ${currentCount})`);
+            }
+
+            // Small delay between batches to avoid overwhelming the API
+            if (i < batches.length - 1) {
+              await new Promise(resolve => setTimeout(resolve, 300));
+            }
+          } catch (batchError) {
+            console.error(`Error loading batch ${i + 1}:`, batchError);
+            // Continue with next batch even if one fails
+          }
+        }
+
+        setIsLoadingMore(false);
+        console.log('✅ All tenders loaded successfully');
+
+        // PHASE 3: AI Enhancement (only if we have matches)
+        const allTenders = allTenders;
+        if (allTenders && allTenders.length > 0) {
+          const finalMatched = matchTendersToProfile(allTenders, profile);
+          if (finalMatched.length > 0) {
+            enhanceWithAI(finalMatched, profile);
+          }
         }
 
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to load matched tenders');
-      } finally {
         setLoading(false);
+        setIsLoadingMore(false);
       }
     };
 
     fetchProfileAndTenders();
-  }, [authToken]);
-
-  // AI Enhancement - runs in background after initial matching
+  }, [authToken]);  // AI Enhancement - runs in background after initial matching
   const enhanceWithAI = async (tenders, profile) => {
     try {
       setAiLoading(true);
@@ -670,6 +771,25 @@ const SmartMatchedTenders = () => {
                           <span>AI Strategic Insights</span>
                         </div>
                         <p className="ai-summary-text">{aiSummary}</p>
+                      </div>
+                    )}
+
+                    {/* Progressive Loading Indicator */}
+                    {isLoadingMore && (
+                      <div className="loading-more-notice">
+                        <div className="loading-more-content">
+                          <i className="bi bi-arrow-repeat spinning"></i>
+                          <span>Loading more opportunities...</span>
+                          <div className="progress-bar-container">
+                            <div 
+                              className="progress-bar-fill" 
+                              style={{ width: `${loadingProgress.percentage}%` }}
+                            ></div>
+                          </div>
+                          <span className="progress-text">
+                            {loadingProgress.current} of {loadingProgress.total} tenders loaded
+                          </span>
+                        </div>
                       </div>
                     )}
                   </div>
