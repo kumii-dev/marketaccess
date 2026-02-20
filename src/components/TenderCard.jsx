@@ -41,38 +41,11 @@ const TenderCard = ({ tender }) => {
     const isInIframe = window.self !== window.top;
     
     if (isInIframe) {
-      // If in iframe, try to communicate with parent window
-      try {
-        // First attempt: Post message to parent (for Lovable/kumii.africa)
-        window.parent.postMessage({
-          type: 'OPEN_URL',
-          url: url
-        }, '*');
-        
-        console.log('Posted message to parent window to open:', url);
-        
-        // Fallback: Still try to open with target="_blank"
-        setTimeout(() => {
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }, 100);
-      } catch (error) {
-        console.error('Error opening document from iframe:', error);
-        // Final fallback: try window.top
-        try {
-          window.top.location.href = url;
-        } catch (topError) {
-          console.error('Cannot access window.top:', topError);
-          alert('Unable to open document. Please allow popups for this site.');
-        }
-      }
+      // In iframe: directly navigate to the document
+      // This will open the document in the same tab/iframe
+      window.location.href = url;
     } else {
-      // Not in iframe, use normal anchor click
+      // Not in iframe: open in new tab
       const link = document.createElement('a');
       link.href = url;
       link.target = '_blank';
