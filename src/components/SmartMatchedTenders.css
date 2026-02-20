@@ -200,6 +200,53 @@
   font-weight: 700;
 }
 
+/* Profile Incomplete State */
+.profile-incomplete {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.profile-incomplete i {
+  font-size: 2rem;
+  color: #ff9800;
+  margin-bottom: 0.75rem;
+}
+
+.profile-incomplete p {
+  color: var(--text-primary);
+  line-height: 1.8;
+  margin: 0 0 1rem 0;
+  text-align: left;
+}
+
+.complete-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--sage-green);
+  color: var(--white);
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.complete-profile-btn:hover {
+  background: var(--olive-green);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.complete-profile-btn i {
+  font-size: 1rem;
+}
+
 /* No Matches State */
 .no-matches {
   display: flex;

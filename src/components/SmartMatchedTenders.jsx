@@ -120,12 +120,17 @@ const SmartMatchedTenders = () => {
 
   // Extract business strengths from profile
   const getBusinessStrengths = (profile) => {
-    if (!profile) return [];
+    if (!profile) {
+      console.log('No profile data available for strengths extraction');
+      return [];
+    }
     
+    console.log('Extracting business strengths from profile:', profile);
     const strengths = [];
     
     // Industry/Sector
     const industry = extractProfileField(profile, ['company.industry', 'industry', 'company.sector', 'sector', 'profile.industry']);
+    console.log('Industry extracted:', industry);
     if (industry) {
       strengths.push({
         icon: 'bi-briefcase',
@@ -136,6 +141,7 @@ const SmartMatchedTenders = () => {
     
     // Services offered
     const services = extractProfileField(profile, ['company.services', 'services', 'company.offerings', 'offerings', 'profile.services']);
+    console.log('Services extracted:', services);
     if (services) {
       strengths.push({
         icon: 'bi-tools',
@@ -146,6 +152,7 @@ const SmartMatchedTenders = () => {
     
     // Location/Province
     const province = extractProfileField(profile, ['company.province', 'user.province', 'province', 'company.location', 'location', 'profile.province']);
+    console.log('Province extracted:', province);
     if (province) {
       strengths.push({
         icon: 'bi-geo-alt',
@@ -156,6 +163,7 @@ const SmartMatchedTenders = () => {
     
     // Business categories
     const categories = extractProfileField(profile, ['company.categories', 'categories', 'company.business_categories', 'business_categories', 'profile.categories']);
+    console.log('Categories extracted:', categories);
     if (categories && Array.isArray(categories) && categories.length > 0) {
       strengths.push({
         icon: 'bi-tags',
@@ -166,6 +174,7 @@ const SmartMatchedTenders = () => {
     
     // Expertise/Skills
     const expertise = extractProfileField(profile, ['user.expertise', 'expertise', 'user.skills', 'skills', 'profile.expertise']);
+    console.log('Expertise extracted:', expertise);
     if (expertise) {
       strengths.push({
         icon: 'bi-lightbulb',
@@ -174,6 +183,7 @@ const SmartMatchedTenders = () => {
       });
     }
     
+    console.log('Total strengths found:', strengths.length, strengths);
     return strengths;
   };
 
@@ -476,20 +486,43 @@ const SmartMatchedTenders = () => {
                   <h3>Your Business Profile</h3>
                 </div>
                 <p className="profile-info">
-                  We've analyzed your profile to find the best tender matches. Here are your key strengths:
+                  We've analyzed your profile to find the best tender matches. 
+                  {getBusinessStrengths(profileData).length > 0 
+                    ? 'Here are your key strengths:' 
+                    : 'Complete your profile to see your strengths and get better matches.'}
                 </p>
                 
-                <div className="business-strengths">
-                  {getBusinessStrengths(profileData).map((strength, index) => (
-                    <div key={index} className="strength-item">
-                      <i className={`bi ${strength.icon}`}></i>
-                      <div className="strength-content">
-                        <span className="strength-label">{strength.label}</span>
-                        <span className="strength-value">{strength.value}</span>
+                {getBusinessStrengths(profileData).length > 0 ? (
+                  <div className="business-strengths">
+                    {getBusinessStrengths(profileData).map((strength, index) => (
+                      <div key={index} className="strength-item">
+                        <i className={`bi ${strength.icon}`}></i>
+                        <div className="strength-content">
+                          <span className="strength-label">{strength.label}</span>
+                          <span className="strength-value">{strength.value}</span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="profile-incomplete">
+                    <i className="bi bi-exclamation-circle"></i>
+                    <p>
+                      Your profile appears to be incomplete. To get better tender matches, please add:
+                      <br/>• Industry or business sector
+                      <br/>• Services or products offered
+                      <br/>• Business location
+                      <br/>• Skills and expertise
+                    </p>
+                    <button 
+                      className="complete-profile-btn"
+                      onClick={() => window.parent.postMessage({ type: 'NAVIGATE_TO_PROFILE' }, '*')}
+                    >
+                      <i className="bi bi-pencil-square"></i>
+                      Complete Your Profile
+                    </button>
+                  </div>
+                )}
               </div>
 
               {matchedTenders.length > 0 && (
