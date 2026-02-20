@@ -129,29 +129,53 @@ const SmartMatchedTenders = () => {
     const strengths = [];
     
     // Industry/Sector
-    const industry = extractProfileField(profile, ['company.industry', 'industry', 'company.sector', 'sector', 'profile.industry']);
+    const industry = extractProfileField(profile, [
+      'startup.industry',
+      'profile.industry_sectors',
+      'company.industry', 
+      'industry', 
+      'company.sector', 
+      'sector'
+    ]);
     console.log('Industry extracted:', industry);
     if (industry) {
+      const displayValue = Array.isArray(industry) ? industry.join(', ') : industry;
       strengths.push({
         icon: 'bi-briefcase',
         label: 'Industry',
-        value: industry
+        value: displayValue
       });
     }
     
-    // Services offered
-    const services = extractProfileField(profile, ['company.services', 'services', 'company.offerings', 'offerings', 'profile.services']);
-    console.log('Services extracted:', services);
+    // Services/Products offered
+    const services = extractProfileField(profile, [
+      'startup.key_products_services',
+      'profile.skills',
+      'company.services', 
+      'services', 
+      'company.offerings', 
+      'offerings'
+    ]);
+    console.log('Services/Skills extracted:', services);
     if (services) {
+      const displayValue = Array.isArray(services) ? services.join(', ') : services;
       strengths.push({
         icon: 'bi-tools',
-        label: 'Services',
-        value: services
+        label: 'Services/Skills',
+        value: displayValue
       });
     }
     
     // Location/Province
-    const province = extractProfileField(profile, ['company.province', 'user.province', 'province', 'company.location', 'location', 'profile.province']);
+    const province = extractProfileField(profile, [
+      'startup.location',
+      'profile.location',
+      'company.province', 
+      'user.province', 
+      'province', 
+      'company.location', 
+      'location'
+    ]);
     console.log('Province extracted:', province);
     if (province) {
       strengths.push({
@@ -161,25 +185,51 @@ const SmartMatchedTenders = () => {
       });
     }
     
-    // Business categories
-    const categories = extractProfileField(profile, ['company.categories', 'categories', 'company.business_categories', 'business_categories', 'profile.categories']);
-    console.log('Categories extracted:', categories);
-    if (categories && Array.isArray(categories) && categories.length > 0) {
+    // Business Stage
+    const stage = extractProfileField(profile, [
+      'startup.stage',
+      'company.stage',
+      'stage'
+    ]);
+    console.log('Stage extracted:', stage);
+    if (stage) {
       strengths.push({
-        icon: 'bi-tags',
-        label: 'Categories',
-        value: categories.join(', ')
+        icon: 'bi-graph-up',
+        label: 'Business Stage',
+        value: stage.charAt(0).toUpperCase() + stage.slice(1)
       });
     }
     
-    // Expertise/Skills
-    const expertise = extractProfileField(profile, ['user.expertise', 'expertise', 'user.skills', 'skills', 'profile.expertise']);
-    console.log('Expertise extracted:', expertise);
-    if (expertise) {
+    // Interests/Focus Areas
+    const interests = extractProfileField(profile, [
+      'profile.interests',
+      'interests',
+      'profile.industry_sectors',
+      'company.categories', 
+      'categories'
+    ]);
+    console.log('Interests extracted:', interests);
+    if (interests && Array.isArray(interests) && interests.length > 0) {
       strengths.push({
-        icon: 'bi-lightbulb',
-        label: 'Expertise',
-        value: expertise
+        icon: 'bi-tags',
+        label: 'Focus Areas',
+        value: interests.join(', ')
+      });
+    }
+    
+    // Persona/Type
+    const personaType = extractProfileField(profile, [
+      'profile.persona_type',
+      'persona_type',
+      'user.type'
+    ]);
+    console.log('Persona type extracted:', personaType);
+    if (personaType) {
+      const displayType = personaType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+      strengths.push({
+        icon: 'bi-person-badge',
+        label: 'Profile Type',
+        value: displayType
       });
     }
     
@@ -350,16 +400,35 @@ const SmartMatchedTenders = () => {
     
     console.log('Matching tenders to profile:', profile);
     
-    // Extract profile data for matching using robust extraction
-    const industry = extractProfileField(profile, ['company.industry', 'industry', 'company.sector', 'sector']) || '';
-    const services = extractProfileField(profile, ['company.services', 'services', 'company.offerings', 'offerings']) || '';
-    const products = extractProfileField(profile, ['company.products', 'products', 'company.goods', 'goods']) || '';
-    const skills = extractProfileField(profile, ['user.skills', 'skills', 'profile.skills']) || '';
-    const expertise = extractProfileField(profile, ['user.expertise', 'expertise', 'profile.expertise']) || '';
-    const description = extractProfileField(profile, ['company.description', 'description', 'company.about', 'about']) || '';
+    // Extract profile data for matching using robust extraction with correct paths
+    const industry = extractProfileField(profile, [
+      'startup.industry',
+      'profile.industry_sectors',
+      'company.industry', 
+      'industry'
+    ]) || '';
+    
+    const services = extractProfileField(profile, [
+      'startup.key_products_services',
+      'profile.skills',
+      'company.services', 
+      'services'
+    ]) || '';
+    
+    const interests = extractProfileField(profile, [
+      'profile.interests',
+      'interests'
+    ]) || '';
+    
+    const bio = extractProfileField(profile, [
+      'profile.bio',
+      'bio',
+      'startup.description',
+      'description'
+    ]) || '';
     
     // Combine all text for keyword extraction
-    const allProfileText = `${industry} ${services} ${products} ${skills} ${expertise} ${description}`;
+    const allProfileText = `${industry} ${services} ${interests} ${bio}`;
     
     const profileKeywords = allProfileText
       .toLowerCase()
@@ -369,8 +438,20 @@ const SmartMatchedTenders = () => {
 
     console.log('Extracted keywords:', profileKeywords);
 
-    const profileProvince = extractProfileField(profile, ['company.province', 'user.province', 'province', 'company.location', 'location']);
-    const profileCategories = extractProfileField(profile, ['company.categories', 'categories', 'company.business_categories', 'business_categories']) || [];
+    const profileProvince = extractProfileField(profile, [
+      'startup.location',
+      'profile.location',
+      'company.province', 
+      'province', 
+      'location'
+    ]);
+    
+    const profileCategories = extractProfileField(profile, [
+      'profile.interests',
+      'profile.industry_sectors',
+      'company.categories', 
+      'categories'
+    ]) || [];
     
     console.log('Profile province:', profileProvince);
     console.log('Profile categories:', profileCategories);
