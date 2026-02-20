@@ -37,28 +37,30 @@ const TenderCard = ({ tender }) => {
 
     console.log('Opening document:', url);
     
-    // Simple approach: just create a link and click it
-    // This should work in most contexts including iframes
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
+    // When in iframe (like kumii.africa), navigate parent window directly
+    // This prevents the about:blank issue
+    const isInIframe = window.self !== window.top;
     
-    // Trigger the click immediately
-    document.body.appendChild(link);
-    
-    // Use requestAnimationFrame to ensure the element is in the DOM
-    requestAnimationFrame(() => {
-      link.click();
-      console.log('Document link clicked');
-      
-      // Clean up after a short delay
-      setTimeout(() => {
-        if (link.parentNode) {
-          document.body.removeChild(link);
+    if (isInIframe) {
+      try {
+        // Open in parent window's new tab
+        window.top.open(url, '_blank', 'noopener,noreferrer');
+        console.log('Opened in parent window');
+        return;
+      } catch (e) {
+        console.log('Cannot access parent, trying navigation:', e);
+        // If blocked, navigate parent window directly
+        try {
+          window.top.location.href = url;
+          return;
+        } catch (e2) {
+          console.log('Parent navigation blocked:', e2);
         }
-      }, 100);
-    });
+      }
+    }
+    
+    // Fallback: Open in new tab normally
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   const handleDownloadAll = () => {
