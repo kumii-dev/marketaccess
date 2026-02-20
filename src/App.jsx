@@ -269,12 +269,7 @@ function App() {
             <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
               Private Tenders
             </button>
-            <button className="header-btn header-btn-secondary">
-             Dashboard
-            </button>
-            <button className="header-btn header-btn-secondary">
-              My Profile
-            </button>
+           
           </div>
         </div>
       </header>
