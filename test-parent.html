@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Market Access - Parent Window Test</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f5;
+    }
+    .header {
+      background: #2c3e50;
+      color: white;
+      padding: 1rem 2rem;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    .controls {
+      background: white;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #ddd;
+    }
+    .control-group {
+      margin-bottom: 1rem;
+    }
+    .control-group label {
+      display: block;
+      margin-bottom: 0.5rem;
+      font-weight: 600;
+      color: #333;
+    }
+    .control-group input {
+      width: 100%;
+      padding: 0.5rem;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    .control-group button {
+      padding: 0.5rem 1rem;
+      background: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .control-group button:hover {
+      background: #229954;
+    }
+    .control-group button.secondary {
+      background: #3498db;
+    }
+    .control-group button.secondary:hover {
+      background: #2980b9;
+    }
+    .iframe-container {
+      width: 100%;
+      height: calc(100vh - 200px);
+      border: none;
+    }
+    .iframe-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .log {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: #2c3e50;
+      color: #ecf0f1;
+      padding: 0.5rem 1rem;
+      max-height: 150px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      border-top: 2px solid #27ae60;
+    }
+    .log-entry {
+      margin: 0.25rem 0;
+      padding: 0.25rem;
+      border-left: 3px solid #27ae60;
+      padding-left: 0.5rem;
+    }
+    .log-entry.error {
+      border-left-color: #e74c3c;
+      color: #e74c3c;
+    }
+    .log-entry.info {
+      border-left-color: #3498db;
+      color: #3498db;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🧪 Market Access - Parent Window Test Page</h1>
+  </div>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Supabase Auth Token (JWT):</label>
+      <input 
+        type="text" 
+        id="authToken" 
+        placeholder="Enter your Supabase JWT token here..."
+      />
+    </div>
+    <div class="control-group">
+      <button onclick="sendAuthToken()">Send Token to Iframe</button>
+      <button class="secondary" onclick="clearLogs()">Clear Logs</button>
+    </div>
+    <div class="control-group">
+      <p style="color: #666; font-size: 14px; margin: 0.5rem 0 0 0;">
+        <strong>Note:</strong> Get your token from kumii.africa by running this in the console:<br>
+        <code style="background: #f5f5f5; padding: 0.25rem 0.5rem; border-radius: 3px;">
+          (await supabase.auth.getSession()).data.session?.access_token
+        </code>
+      </p>
+    </div>
+  </div>
+
+  <div class="iframe-container">
+    <iframe 
+      id="marketAccessIframe"
+      src="https://marketaccess.vercel.app"
+      allow="clipboard-read; clipboard-write"
+    ></iframe>
+  </div>
+
+  <div class="log" id="logContainer">
+    <div class="log-entry info">Log initialized. Waiting for actions...</div>
+  </div>
+
+  <script>
+    const iframe = document.getElementById('marketAccessIframe');
+    const logContainer = document.getElementById('logContainer');
+    const authTokenInput = document.getElementById('authToken');
+
+    // Log function
+    function log(message, type = 'info') {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      logContainer.appendChild(entry);
+      logContainer.scrollTop = logContainer.scrollHeight;
+      console.log(`[${type.toUpperCase()}]`, message);
+    }
+
+    // Listen for messages from iframe
+    window.addEventListener('message', (event) => {
+      // Log all messages
+      log(`📨 Received message from ${event.origin}`, 'info');
+      log(`   Type: ${event.data?.type || 'unknown'}`, 'info');
+
+      // Verify origin for production
+      if (!event.origin.includes('marketaccess.vercel.app') && 
+          !event.origin.includes('localhost')) {
+        log(`⚠️  Message from untrusted origin: ${event.origin}`, 'error');
+        return;
+      }
+
+      // Handle token request
+      if (event.data && event.data.type === 'REQUEST_AUTH_TOKEN') {
+        log('🔑 Iframe requesting auth token', 'info');
+        
+        const token = authTokenInput.value.trim();
+        if (token) {
+          log('✅ Auto-sending stored token', 'info');
+          sendAuthToken();
+        } else {
+          log('⚠️  No token available. Please enter token and click "Send Token"', 'error');
+        }
+      }
+
+      // Handle other messages
+      if (event.data && event.data.type === 'OPEN_DOCUMENT') {
+        log(`📄 Request to open document: ${event.data.url}`, 'info');
+        window.open(event.data.url, '_blank', 'noopener,noreferrer');
+      }
+    });
+
+    // Send auth token to iframe
+    function sendAuthToken() {
+      const token = authTokenInput.value.trim();
+      
+      if (!token) {
+        log('❌ Error: No token entered', 'error');
+        alert('Please enter an auth token first');
+        return;
+      }
+
+      try {
+        iframe.contentWindow.postMessage({
+          type: 'KUMII_AUTH_TOKEN',
+          token: token
+        }, 'https://marketaccess.vercel.app');
+        
+        log('✅ Sent KUMII_AUTH_TOKEN to iframe', 'info');
+        log(`   Token: ${token.substring(0, 20)}...`, 'info');
+      } catch (error) {
+        log(`❌ Error sending token: ${error.message}`, 'error');
+      }
+    }
+
+    // Clear logs
+    function clearLogs() {
+      logContainer.innerHTML = '<div class="log-entry info">Logs cleared.</div>';
+    }
+
+    // Wait for iframe to load, then send token if available
+    iframe.addEventListener('load', () => {
+      log('🌐 Iframe loaded successfully', 'info');
+      
+      setTimeout(() => {
+        const token = authTokenInput.value.trim();
+        if (token) {
+          log('🔄 Iframe loaded with stored token, sending automatically...', 'info');
+          sendAuthToken();
+        }
+      }, 1000);
+    });
+
+    // Load token from localStorage if available
+    window.addEventListener('load', () => {
+      const savedToken = localStorage.getItem('test_auth_token');
+      if (savedToken) {
+        authTokenInput.value = savedToken;
+        log('💾 Loaded saved token from localStorage', 'info');
+      }
+    });
+
+    // Save token to localStorage on input change
+    authTokenInput.addEventListener('input', () => {
+      const token = authTokenInput.value.trim();
+      if (token) {
+        localStorage.setItem('test_auth_token', token);
+      }
+    });
+  </script>
+</body>
+</html>
