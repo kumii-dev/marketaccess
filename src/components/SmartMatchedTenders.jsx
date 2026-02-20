@@ -125,51 +125,81 @@ const SmartMatchedTenders = () => {
     const strengths = [];
     
     // Industry/Sector
-    if (profile.company?.industry) {
+    const industry = extractProfileField(profile, ['company.industry', 'industry', 'company.sector', 'sector', 'profile.industry']);
+    if (industry) {
       strengths.push({
         icon: 'bi-briefcase',
         label: 'Industry',
-        value: profile.company.industry
+        value: industry
       });
     }
     
     // Services offered
-    if (profile.company?.services) {
+    const services = extractProfileField(profile, ['company.services', 'services', 'company.offerings', 'offerings', 'profile.services']);
+    if (services) {
       strengths.push({
         icon: 'bi-tools',
         label: 'Services',
-        value: profile.company.services
+        value: services
       });
     }
     
     // Location/Province
-    if (profile.company?.province || profile.user?.province) {
+    const province = extractProfileField(profile, ['company.province', 'user.province', 'province', 'company.location', 'location', 'profile.province']);
+    if (province) {
       strengths.push({
         icon: 'bi-geo-alt',
         label: 'Location',
-        value: profile.company?.province || profile.user?.province
+        value: province
       });
     }
     
     // Business categories
-    if (profile.company?.categories && profile.company.categories.length > 0) {
+    const categories = extractProfileField(profile, ['company.categories', 'categories', 'company.business_categories', 'business_categories', 'profile.categories']);
+    if (categories && Array.isArray(categories) && categories.length > 0) {
       strengths.push({
         icon: 'bi-tags',
         label: 'Categories',
-        value: profile.company.categories.join(', ')
+        value: categories.join(', ')
       });
     }
     
     // Expertise/Skills
-    if (profile.user?.expertise) {
+    const expertise = extractProfileField(profile, ['user.expertise', 'expertise', 'user.skills', 'skills', 'profile.expertise']);
+    if (expertise) {
       strengths.push({
         icon: 'bi-lightbulb',
         label: 'Expertise',
-        value: profile.user.expertise
+        value: expertise
       });
     }
     
     return strengths;
+  };
+
+  // Helper function to extract profile fields with multiple fallback paths
+  const extractProfileField = (profile, paths) => {
+    if (!profile) return null;
+    
+    for (const path of paths) {
+      const keys = path.split('.');
+      let value = profile;
+      
+      for (const key of keys) {
+        if (value && typeof value === 'object' && key in value) {
+          value = value[key];
+        } else {
+          value = null;
+          break;
+        }
+      }
+      
+      if (value !== null && value !== undefined && value !== '') {
+        return value;
+      }
+    }
+    
+    return null;
   };
 
   // Get user's display name from profile
@@ -308,17 +338,32 @@ const SmartMatchedTenders = () => {
 
     const scores = {};
     
-    // Extract profile data for matching
-    const profileKeywords = [
-      ...(profile.company?.industry || '').toLowerCase().split(/\s+/),
-      ...(profile.company?.services || '').toLowerCase().split(/\s+/),
-      ...(profile.company?.products || '').toLowerCase().split(/\s+/),
-      ...(profile.user?.skills || '').toLowerCase().split(/\s+/),
-      ...(profile.user?.expertise || '').toLowerCase().split(/\s+/)
-    ].filter(word => word.length > 3); // Filter out short words
+    console.log('Matching tenders to profile:', profile);
+    
+    // Extract profile data for matching using robust extraction
+    const industry = extractProfileField(profile, ['company.industry', 'industry', 'company.sector', 'sector']) || '';
+    const services = extractProfileField(profile, ['company.services', 'services', 'company.offerings', 'offerings']) || '';
+    const products = extractProfileField(profile, ['company.products', 'products', 'company.goods', 'goods']) || '';
+    const skills = extractProfileField(profile, ['user.skills', 'skills', 'profile.skills']) || '';
+    const expertise = extractProfileField(profile, ['user.expertise', 'expertise', 'profile.expertise']) || '';
+    const description = extractProfileField(profile, ['company.description', 'description', 'company.about', 'about']) || '';
+    
+    // Combine all text for keyword extraction
+    const allProfileText = `${industry} ${services} ${products} ${skills} ${expertise} ${description}`;
+    
+    const profileKeywords = allProfileText
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(word => word.length > 3) // Filter out short words
+      .filter((word, index, self) => self.indexOf(word) === index); // Remove duplicates
 
-    const profileProvince = profile.company?.province || profile.user?.province;
-    const profileCategories = profile.company?.categories || [];
+    console.log('Extracted keywords:', profileKeywords);
+
+    const profileProvince = extractProfileField(profile, ['company.province', 'user.province', 'province', 'company.location', 'location']);
+    const profileCategories = extractProfileField(profile, ['company.categories', 'categories', 'company.business_categories', 'business_categories']) || [];
+    
+    console.log('Profile province:', profileProvince);
+    console.log('Profile categories:', profileCategories);
 
     // Score each tender
     const scoredTenders = tenders.map(tender => {
@@ -346,7 +391,7 @@ const SmartMatchedTenders = () => {
 
       // Category matching
       const tenderCategory = tender.tender?.mainProcurementCategory || tender.tender?.category;
-      if (tenderCategory && profileCategories.includes(tenderCategory)) {
+      if (tenderCategory && Array.isArray(profileCategories) && profileCategories.includes(tenderCategory)) {
         score += 30;
         reasons.push(`Category match: ${tenderCategory}`);
       }
