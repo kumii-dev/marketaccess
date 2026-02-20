@@ -37,69 +37,23 @@ const TenderCard = ({ tender }) => {
 
     console.log('Opening document:', url);
     
-    try {
-      // Check if we're in an iframe
-      const isInIframe = window.self !== window.top;
-      
-      if (isInIframe) {
-        console.log('App is embedded in iframe, attempting to open in parent window');
-        // Try to open in parent window
-        try {
-          const opened = window.top.open(url, '_blank', 'noopener,noreferrer');
-          if (!opened || opened.closed || typeof opened.closed === 'undefined') {
-            console.warn('Popup blocked or failed, trying alternative method');
-            // If blocked, create a link and click it
-            const link = document.createElement('a');
-            link.href = url;
-            link.target = '_top'; // Open in parent frame
-            link.rel = 'noopener noreferrer';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-          }
-        } catch (e) {
-          console.warn('Cannot access parent window (cross-origin):', e);
-          // Cross-origin iframe, use link method with _blank
-          const link = document.createElement('a');
-          link.href = url;
-          link.target = '_blank';
-          link.rel = 'noopener noreferrer';
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-      } else {
-        // Not in iframe, use standard approach
-        const link = document.createElement('a');
-        link.href = url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        
-        // Try to trigger download attribute if same origin
-        try {
-          const urlObj = new URL(url);
-          if (urlObj.origin === window.location.origin) {
-            link.download = '';
-          }
-        } catch {
-          // External URL, just open in new tab
-        }
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
-    } catch (error) {
-      console.error('Error downloading document:', error);
-      // Final fallback - just create a link and click it
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      document.body.appendChild(link);
-      link.click();
+    // Create a temporary anchor element and click it
+    // This works better in iframes than window.open()
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    
+    // Add to DOM temporarily (required for some browsers)
+    document.body.appendChild(link);
+    
+    // Trigger click
+    link.click();
+    
+    // Clean up
+    setTimeout(() => {
       document.body.removeChild(link);
-    }
+    }, 100);
   };
 
   const handleDownloadAll = () => {
