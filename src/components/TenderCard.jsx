@@ -37,17 +37,50 @@ const TenderCard = ({ tender }) => {
 
     console.log('Opening document:', url);
     
-    // Create a temporary anchor element and click it
-    // This works reliably in both iframe and normal contexts
-    const link = document.createElement('a');
-    link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
+    // Check if we're in an iframe
+    const isInIframe = window.self !== window.top;
     
-    // Append to body, click, and remove
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    if (isInIframe) {
+      // If in iframe, try to communicate with parent window
+      try {
+        // First attempt: Post message to parent (for Lovable/kumii.africa)
+        window.parent.postMessage({
+          type: 'OPEN_URL',
+          url: url
+        }, '*');
+        
+        console.log('Posted message to parent window to open:', url);
+        
+        // Fallback: Still try to open with target="_blank"
+        setTimeout(() => {
+          const link = document.createElement('a');
+          link.href = url;
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+        }, 100);
+      } catch (error) {
+        console.error('Error opening document from iframe:', error);
+        // Final fallback: try window.top
+        try {
+          window.top.location.href = url;
+        } catch (topError) {
+          console.error('Cannot access window.top:', topError);
+          alert('Unable to open document. Please allow popups for this site.');
+        }
+      }
+    } else {
+      // Not in iframe, use normal anchor click
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const handleDownloadAll = () => {
