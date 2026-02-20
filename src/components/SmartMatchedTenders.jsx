@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fetchTenders } from '../lib/api';
 import { batchAnalyzeMatches, generatePortfolioSummary } from '../utils/openaiService';
 import { getCachedTenders, cacheTenders, getCacheInfo } from '../utils/tenderCache';
@@ -23,6 +23,8 @@ const SmartMatchedTenders = () => {
   const [aiSummary, setAiSummary] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
   
+  // Ref to track latest matched tenders for AI enhancement
+  const latestMatchedRef = useRef([]);
   // Filter state
   const [filters, setFilters] = useState({
     keywords: '',
@@ -182,6 +184,9 @@ const SmartMatchedTenders = () => {
                 const newMatched = matchTendersToProfile(combined, profile);
                 setMatchedTenders(newMatched);
                 
+                // Update ref with latest matches
+                latestMatchedRef.current = newMatched;
+                
                 // Cache the combined result after last batch
                 if (i === batches.length - 1) {
                   cacheTenders(combined, dateFrom, dateTo);
@@ -210,13 +215,9 @@ const SmartMatchedTenders = () => {
         setIsLoadingMore(false);
         console.log('✅ All tenders loaded successfully');
 
-        // PHASE 3: AI Enhancement (only if we have matches)
-        const allTenders = allTenders;
-        if (allTenders && allTenders.length > 0) {
-          const finalMatched = matchTendersToProfile(allTenders, profile);
-          if (finalMatched.length > 0) {
-            enhanceWithAI(finalMatched, profile);
-          }
+        // PHASE 3: AI Enhancement (use ref to get latest matches)
+        if (latestMatchedRef.current && latestMatchedRef.current.length > 0) {
+          enhanceWithAI(latestMatchedRef.current, profile);
         }
 
       } catch (err) {
@@ -228,7 +229,8 @@ const SmartMatchedTenders = () => {
     };
 
     fetchProfileAndTenders();
-  }, [authToken]);  // AI Enhancement - runs in background after initial matching
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authToken]); // matchTendersToProfile is stable and doesn't need to be in deps
   const enhanceWithAI = async (tenders, profile) => {
     try {
       setAiLoading(true);
