@@ -7,6 +7,7 @@ import ErrorMessage from './components/ErrorMessage';
 import Pagination from './components/Pagination';
 import Sidebar from './components/Sidebar';
 import PrivateTendersPage from './components/PrivateTendersPage';
+import SmartMatchedTenders from './components/SmartMatchedTenders';
 import TopNavbar from './components/TopNavbar';
 import './App.css';
 
@@ -246,6 +247,20 @@ function App() {
     );
   }
 
+  // Render Smart Matched Tenders page if that section is selected
+  if (currentSection === 'smart-matched-tenders') {
+    return (
+      <div className="app">
+        {/* <TopNavbar /> */}
+        {/* <Sidebar 
+          currentSection={currentSection} 
+          onSectionChange={handleSectionChange}
+        /> */}
+        <SmartMatchedTenders />
+      </div>
+    );
+  }
+
   // Default: Render Government Tenders page
   return (
     <div className="app">
@@ -265,6 +280,9 @@ function App() {
           <div className="header-actions">
             <button className="header-btn header-btn-primary" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>
               Browse Opportunities
+            </button>
+            <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('smart-matched-tenders')}>
+              Smart Matched Tenders
             </button>
             <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
               Private Tenders

@@ -1,0 +1,238 @@
+.smart-matched-container {
+  min-height: 100vh;
+  background: var(--background-light);
+}
+
+/* Header Styles */
+.smart-matched-header {
+  background: linear-gradient(135deg, var(--sage-green) 0%, var(--olive-green) 100%);
+  color: var(--white);
+  padding: 3rem 0;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.smart-matched-title {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 1rem;
+  color: var(--white);
+}
+
+.smart-matched-description {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.95);
+  max-width: 700px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Main Content */
+.smart-matched-main {
+  padding: 2rem 0;
+}
+
+/* Auth Waiting State */
+.auth-waiting {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  padding: 2rem;
+}
+
+.auth-waiting-content {
+  text-align: center;
+  max-width: 500px;
+  padding: 3rem;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.auth-waiting-content h2 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 1.5rem 0 1rem 0;
+}
+
+.auth-waiting-content p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+/* Profile Summary */
+.profile-summary {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 2rem;
+  border-left: 4px solid var(--sage-green);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.profile-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.profile-summary-header i {
+  font-size: 1.5rem;
+  color: var(--sage-green);
+}
+
+.profile-summary-header h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.profile-info {
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+/* No Matches State */
+.no-matches {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 50vh;
+  padding: 2rem;
+}
+
+.no-matches-content {
+  text-align: center;
+  max-width: 500px;
+  padding: 3rem;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.no-matches-content h3 {
+  font-size: 1.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 1.5rem 0 1rem 0;
+}
+
+.no-matches-content p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 2rem;
+}
+
+.browse-all-btn {
+  background: var(--sage-green);
+  color: var(--white);
+  border: none;
+  padding: 0.875rem 2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 6px rgba(122, 133, 103, 0.3);
+}
+
+.browse-all-btn:hover {
+  background: var(--olive-green);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(122, 133, 103, 0.4);
+}
+
+.browse-all-btn:active {
+  transform: translateY(0);
+}
+
+/* Matches Header */
+.matches-header {
+  text-align: center;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.matches-header h2 {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.matches-header h2 i {
+  color: var(--sage-green);
+  font-size: 1.8rem;
+}
+
+.matches-header p {
+  color: var(--text-secondary);
+  font-size: 1rem;
+  margin: 0;
+}
+
+/* Tender Grid */
+.tender-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 1.5rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .smart-matched-header {
+    padding: 2rem 0;
+  }
+
+  .smart-matched-title {
+    font-size: 2rem;
+  }
+
+  .smart-matched-description {
+    font-size: 1rem;
+  }
+
+  .tender-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-waiting-content,
+  .no-matches-content {
+    padding: 2rem 1.5rem;
+  }
+
+  .matches-header h2 {
+    font-size: 1.5rem;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .smart-matched-title {
+    font-size: 1.5rem;
+  }
+
+  .smart-matched-description {
+    font-size: 0.95rem;
+  }
+
+  .tender-grid {
+    gap: 1rem;
+  }
+}
