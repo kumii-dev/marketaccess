@@ -118,6 +118,60 @@ const SmartMatchedTenders = () => {
     fetchProfileAndTenders();
   }, [authToken]);
 
+  // Extract business strengths from profile
+  const getBusinessStrengths = (profile) => {
+    if (!profile) return [];
+    
+    const strengths = [];
+    
+    // Industry/Sector
+    if (profile.company?.industry) {
+      strengths.push({
+        icon: 'bi-briefcase',
+        label: 'Industry',
+        value: profile.company.industry
+      });
+    }
+    
+    // Services offered
+    if (profile.company?.services) {
+      strengths.push({
+        icon: 'bi-tools',
+        label: 'Services',
+        value: profile.company.services
+      });
+    }
+    
+    // Location/Province
+    if (profile.company?.province || profile.user?.province) {
+      strengths.push({
+        icon: 'bi-geo-alt',
+        label: 'Location',
+        value: profile.company?.province || profile.user?.province
+      });
+    }
+    
+    // Business categories
+    if (profile.company?.categories && profile.company.categories.length > 0) {
+      strengths.push({
+        icon: 'bi-tags',
+        label: 'Categories',
+        value: profile.company.categories.join(', ')
+      });
+    }
+    
+    // Expertise/Skills
+    if (profile.user?.expertise) {
+      strengths.push({
+        icon: 'bi-lightbulb',
+        label: 'Expertise',
+        value: profile.user.expertise
+      });
+    }
+    
+    return strengths;
+  };
+
   // Apply filters to matched tenders
   useEffect(() => {
     if (!matchedTenders || matchedTenders.length === 0) {
@@ -311,16 +365,44 @@ const SmartMatchedTenders = () => {
           )}
 
           {!loading && !error && profileData && (
-            <div className="profile-summary">
-              <div className="profile-summary-header">
-                <i className="bi bi-person-check"></i>
-                <h3>Profile Loaded Successfully</h3>
+            <>
+              <div className="profile-summary">
+                <div className="profile-summary-header">
+                  <i className="bi bi-person-check"></i>
+                  <h3>Your Business Profile</h3>
+                </div>
+                <p className="profile-info">
+                  We've analyzed your profile to find the best tender matches. Here are your key strengths:
+                </p>
+                
+                <div className="business-strengths">
+                  {getBusinessStrengths(profileData).map((strength, index) => (
+                    <div key={index} className="strength-item">
+                      <i className={`bi ${strength.icon}`}></i>
+                      <div className="strength-content">
+                        <span className="strength-label">{strength.label}</span>
+                        <span className="strength-value">{strength.value}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <p className="profile-info">
-                Your profile has been analyzed. Matching algorithm is processing your business information
-                to find relevant opportunities.
-              </p>
-            </div>
+
+              {matchedTenders.length > 0 && (
+                <div className="matching-summary">
+                  <div className="summary-icon">
+                    <i className="bi bi-graph-up"></i>
+                  </div>
+                  <div className="summary-content">
+                    <h4>Match Analysis Complete</h4>
+                    <p>
+                      Found <strong>{matchedTenders.length}</strong> tender{matchedTenders.length !== 1 ? 's' : ''} that align with your business profile. 
+                      Each tender is scored based on relevance to your industry, location, expertise, and business capabilities.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {!loading && !error && matchedTenders.length > 0 && (
@@ -496,6 +578,30 @@ const SmartMatchedTenders = () => {
                       <i className="bi bi-star-fill"></i>
                       <span>{tender.matchScore || 0}</span>
                     </div>
+                    
+                    {/* Match Reasons */}
+                    {tender.matchReasons && tender.matchReasons.length > 0 && (
+                      <div className="match-reasons">
+                        <div className="match-reasons-header">
+                          <i className="bi bi-check-circle-fill"></i>
+                          <span>Why this matches you:</span>
+                        </div>
+                        <ul className="match-reasons-list">
+                          {tender.matchReasons.slice(0, 3).map((reason, idx) => (
+                            <li key={idx}>
+                              <i className="bi bi-arrow-right-short"></i>
+                              {reason}
+                            </li>
+                          ))}
+                          {tender.matchReasons.length > 3 && (
+                            <li className="more-reasons">
+                              +{tender.matchReasons.length - 3} more reason{tender.matchReasons.length - 3 !== 1 ? 's' : ''}
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    
                     <TenderCard tender={tender} />
                   </div>
                 ))}
