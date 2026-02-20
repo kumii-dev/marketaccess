@@ -10,10 +10,20 @@ const SmartMatchedTenders = () => {
   const [profileData, setProfileData] = useState(null);
   const [allTenders, setAllTenders] = useState([]);
   const [matchedTenders, setMatchedTenders] = useState([]);
+  const [filteredTenders, setFilteredTenders] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [isWaitingForAuth, setIsWaitingForAuth] = useState(true);
   const [matchingScore, setMatchingScore] = useState({});
+  
+  // Filter state
+  const [filters, setFilters] = useState({
+    keywords: '',
+    province: '',
+    category: '',
+    minScore: 0,
+    sortBy: 'score-desc'
+  });
 
   // Listen for KUMII_AUTH_TOKEN from parent window
   useEffect(() => {
@@ -107,6 +117,75 @@ const SmartMatchedTenders = () => {
 
     fetchProfileAndTenders();
   }, [authToken]);
+
+  // Apply filters to matched tenders
+  useEffect(() => {
+    if (!matchedTenders || matchedTenders.length === 0) {
+      setFilteredTenders([]);
+      return;
+    }
+
+    let result = [...matchedTenders];
+
+    // Filter by keywords
+    if (filters.keywords) {
+      const keywords = filters.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
+      result = result.filter(tender => {
+        const title = (tender.tender?.title || '').toLowerCase();
+        const description = (tender.tender?.description || '').toLowerCase();
+        const combinedText = `${title} ${description}`;
+        return keywords.some(keyword => combinedText.includes(keyword));
+      });
+    }
+
+    // Filter by province
+    if (filters.province) {
+      result = result.filter(tender => tender.tender?.province === filters.province);
+    }
+
+    // Filter by category
+    if (filters.category) {
+      result = result.filter(tender => {
+        const category = tender.tender?.mainProcurementCategory || tender.tender?.category;
+        return category === filters.category;
+      });
+    }
+
+    // Filter by minimum score
+    if (filters.minScore > 0) {
+      result = result.filter(tender => (tender.matchScore || 0) >= filters.minScore);
+    }
+
+    // Sort results
+    result.sort((a, b) => {
+      switch (filters.sortBy) {
+        case 'score-desc':
+          return (b.matchScore || 0) - (a.matchScore || 0);
+        case 'score-asc':
+          return (a.matchScore || 0) - (b.matchScore || 0);
+        case 'closing-soon': {
+          const dateA = a.tender?.tenderPeriod?.endDate;
+          const dateB = b.tender?.tenderPeriod?.endDate;
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          return new Date(dateA) - new Date(dateB);
+        }
+        case 'closing-late': {
+          const dateA = a.tender?.tenderPeriod?.endDate;
+          const dateB = b.tender?.tenderPeriod?.endDate;
+          if (!dateA && !dateB) return 0;
+          if (!dateA) return 1;
+          if (!dateB) return -1;
+          return new Date(dateB) - new Date(dateA);
+        }
+        default:
+          return 0;
+      }
+    });
+
+    setFilteredTenders(result);
+  }, [matchedTenders, filters]);
 
   // Smart matching algorithm
   const matchTendersToProfile = (tenders, profile) => {
@@ -242,6 +321,127 @@ const SmartMatchedTenders = () => {
             </div>
           )}
 
+          {!loading && !error && matchedTenders.length > 0 && (
+            <div className="smart-filter-bar">
+              <div className="filter-header">
+                <h3>
+                  <i className="bi bi-funnel"></i>
+                  Refine Your Matches
+                </h3>
+                <button 
+                  className="reset-filters-btn"
+                  onClick={() => setFilters({
+                    keywords: '',
+                    province: '',
+                    category: '',
+                    minScore: 0,
+                    sortBy: 'score-desc'
+                  })}
+                >
+                  <i className="bi bi-arrow-counterclockwise"></i>
+                  Reset Filters
+                </button>
+              </div>
+
+              <div className="filter-grid">
+                <div className="filter-group">
+                  <label htmlFor="keywords">
+                    <i className="bi bi-search"></i>
+                    Additional Keywords
+                  </label>
+                  <input
+                    type="text"
+                    id="keywords"
+                    placeholder="e.g., construction, software, consulting..."
+                    value={filters.keywords}
+                    onChange={(e) => setFilters({ ...filters, keywords: e.target.value })}
+                  />
+                </div>
+
+                <div className="filter-group">
+                  <label htmlFor="province">
+                    <i className="bi bi-geo-alt"></i>
+                    Province
+                  </label>
+                  <select
+                    id="province"
+                    value={filters.province}
+                    onChange={(e) => setFilters({ ...filters, province: e.target.value })}
+                  >
+                    <option value="">All Provinces</option>
+                    <option value="Eastern Cape">Eastern Cape</option>
+                    <option value="Free State">Free State</option>
+                    <option value="Gauteng">Gauteng</option>
+                    <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                    <option value="Limpopo">Limpopo</option>
+                    <option value="Mpumalanga">Mpumalanga</option>
+                    <option value="Northern Cape">Northern Cape</option>
+                    <option value="North West">North West</option>
+                    <option value="Western Cape">Western Cape</option>
+                    <option value="National">National</option>
+                  </select>
+                </div>
+
+                <div className="filter-group">
+                  <label htmlFor="category">
+                    <i className="bi bi-tag"></i>
+                    Category
+                  </label>
+                  <select
+                    id="category"
+                    value={filters.category}
+                    onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                  >
+                    <option value="">All Categories</option>
+                    <option value="goods">Goods</option>
+                    <option value="services">Services</option>
+                    <option value="works">Works</option>
+                    <option value="consultingServices">Consulting Services</option>
+                  </select>
+                </div>
+
+                <div className="filter-group">
+                  <label htmlFor="minScore">
+                    <i className="bi bi-star"></i>
+                    Minimum Match Score: {filters.minScore}
+                  </label>
+                  <input
+                    type="range"
+                    id="minScore"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={filters.minScore}
+                    onChange={(e) => setFilters({ ...filters, minScore: parseInt(e.target.value) })}
+                  />
+                </div>
+
+                <div className="filter-group">
+                  <label htmlFor="sortBy">
+                    <i className="bi bi-sort-down"></i>
+                    Sort By
+                  </label>
+                  <select
+                    id="sortBy"
+                    value={filters.sortBy}
+                    onChange={(e) => setFilters({ ...filters, sortBy: e.target.value })}
+                  >
+                    <option value="score-desc">Highest Match Score</option>
+                    <option value="score-asc">Lowest Match Score</option>
+                    <option value="closing-soon">Closing Soon</option>
+                    <option value="closing-late">Closing Later</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="filter-summary">
+                <span className="match-count">
+                  <strong>{filteredTenders.length}</strong> of <strong>{matchedTenders.length}</strong> matches shown
+                </span>
+              </div>
+            </div>
+          )}
+
           {!loading && !error && matchedTenders.length === 0 && profileData && (
             <div className="no-matches">
               <div className="no-matches-content">
@@ -261,19 +461,41 @@ const SmartMatchedTenders = () => {
             </div>
           )}
 
-          {!loading && !error && matchedTenders.length > 0 && (
-            <>
-              <div className="matches-header">
-                <h2>
-                  <i className="bi bi-star-fill"></i>
-                  {matchedTenders.length} Tender{matchedTenders.length !== 1 ? 's' : ''} Matched
-                </h2>
-                <p>Based on your profile, capabilities, and business information</p>
+          {!loading && !error && matchedTenders.length > 0 && filteredTenders.length === 0 && (
+            <div className="no-matches">
+              <div className="no-matches-content">
+                <i className="bi bi-funnel-fill" style={{ fontSize: '3rem', color: 'var(--gray-medium)' }}></i>
+                <h3>No Matches with Current Filters</h3>
+                <p>
+                  Try adjusting your filters to see more results, or reset filters to view all matched tenders.
+                </p>
+                <button 
+                  className="browse-all-btn"
+                  onClick={() => setFilters({
+                    keywords: '',
+                    province: '',
+                    category: '',
+                    minScore: 0,
+                    sortBy: 'score-desc'
+                  })}
+                >
+                  Reset Filters
+                </button>
               </div>
+            </div>
+          )}
 
+          {!loading && !error && filteredTenders.length > 0 && (
+            <>
               <div className="tender-grid">
-                {matchedTenders.map((tender, index) => (
-                  <TenderCard key={tender.ocid || tender.id || index} tender={tender} />
+                {filteredTenders.map((tender, index) => (
+                  <div key={tender.ocid || tender.id || index} className="matched-tender-wrapper">
+                    <div className="match-score-badge">
+                      <i className="bi bi-star-fill"></i>
+                      <span>{tender.matchScore || 0}</span>
+                    </div>
+                    <TenderCard tender={tender} />
+                  </div>
                 ))}
               </div>
             </>
