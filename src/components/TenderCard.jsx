@@ -5,10 +5,12 @@ import {
   getTenderDocuments,
   formatDate 
 } from '../lib/api';
+import TenderDetailsModal from './TenderDetailsModal';
 import './TenderCard.css';
 
 const TenderCard = ({ tender }) => {
   const [showDocuments, setShowDocuments] = useState(false);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   
   const title = getTenderTitle(tender);
   const description = getTenderDescription(tender);
@@ -145,6 +147,14 @@ const TenderCard = ({ tender }) => {
       </div>
       
       <div className="tender-card-footer">
+        <button 
+          className="view-details-btn"
+          onClick={() => setIsDetailsOpen(true)}
+        >
+          <i className="bi bi-info-circle"></i>
+          View Details
+        </button>
+        
         {hasDocuments ? (
           <>
             {documents.length === 1 ? (
@@ -205,6 +215,12 @@ const TenderCard = ({ tender }) => {
           </button>
         )}
       </div>
+      
+      <TenderDetailsModal
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        tender={tender}
+      />
     </div>
   );
 };
