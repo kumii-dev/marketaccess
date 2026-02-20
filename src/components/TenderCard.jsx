@@ -41,9 +41,18 @@ const TenderCard = ({ tender }) => {
     const isInIframe = window.self !== window.top;
     
     if (isInIframe) {
-      // In iframe: directly navigate to the document
-      // This will open the document in the same tab/iframe
-      window.location.href = url;
+      // In iframe: send message to parent window to open the document
+      try {
+        window.parent.postMessage({
+          type: 'OPEN_DOCUMENT',
+          url: url
+        }, '*');
+        console.log('Posted message to parent window:', url);
+      } catch (error) {
+        console.error('Failed to post message to parent:', error);
+        // Fallback: try to open directly
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
     } else {
       // Not in iframe: open in new tab
       const link = document.createElement('a');
