@@ -295,7 +295,9 @@ const SmartMatchedTenders = () => {
         <div className="container">
           <h1 className="smart-matched-title">Smart Matched Tenders</h1>
           <p className="smart-matched-description">
-            Tenders intelligently matched to your profile, business capabilities, and preferences.
+            Hi {profileData?.user?.first_name && profileData?.user?.last_name 
+              ? `${profileData.user.first_name} ${profileData.user.last_name}` 
+              : profileData?.company?.name || 'there'}, we have auto-matched your business profile to tender opportunities.
           </p>
         </div>
       </header>
