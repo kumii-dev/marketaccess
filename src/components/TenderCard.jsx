@@ -37,39 +37,28 @@ const TenderCard = ({ tender }) => {
 
     console.log('Opening document:', url);
     
-    // Check if we're in an iframe
-    const isInIframe = window !== window.top;
+    // Simple approach: just create a link and click it
+    // This should work in most contexts including iframes
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
     
-    if (isInIframe) {
-      try {
-        // Try to open in parent window
-        window.top.open(url, '_blank', 'noopener,noreferrer');
-        console.log('Opened in parent window');
-      } catch (error) {
-        console.error('Failed to open in parent window:', error);
-        // Fallback: try to navigate parent window directly
-        try {
-          window.top.location.href = url;
-        } catch (e) {
-          console.error('Failed to navigate parent window:', e);
-          // Last resort: open in current context
-          window.location.href = url;
-        }
-      }
-    } else {
-      // Not in iframe, use standard approach
-      const link = document.createElement('a');
-      link.href = url;
-      link.target = '_blank';
-      link.rel = 'noopener noreferrer';
-      
-      document.body.appendChild(link);
+    // Trigger the click immediately
+    document.body.appendChild(link);
+    
+    // Use requestAnimationFrame to ensure the element is in the DOM
+    requestAnimationFrame(() => {
       link.click();
+      console.log('Document link clicked');
       
+      // Clean up after a short delay
       setTimeout(() => {
-        document.body.removeChild(link);
+        if (link.parentNode) {
+          document.body.removeChild(link);
+        }
       }, 100);
-    }
+    });
   };
 
   const handleDownloadAll = () => {
