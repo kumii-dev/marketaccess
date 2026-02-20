@@ -37,30 +37,17 @@ const TenderCard = ({ tender }) => {
 
     console.log('Opening document:', url);
     
-    // When in iframe (like kumii.africa), navigate parent window directly
-    // This prevents the about:blank issue
-    const isInIframe = window.self !== window.top;
+    // Create a temporary anchor element and click it
+    // This works reliably in both iframe and normal contexts
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
     
-    if (isInIframe) {
-      try {
-        // Open in parent window's new tab
-        window.top.open(url, '_blank', 'noopener,noreferrer');
-        console.log('Opened in parent window');
-        return;
-      } catch (e) {
-        console.log('Cannot access parent, trying navigation:', e);
-        // If blocked, navigate parent window directly
-        try {
-          window.top.location.href = url;
-          return;
-        } catch (e2) {
-          console.log('Parent navigation blocked:', e2);
-        }
-      }
-    }
-    
-    // Fallback: Open in new tab normally
-    window.open(url, '_blank', 'noopener,noreferrer');
+    // Append to body, click, and remove
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDownloadAll = () => {
