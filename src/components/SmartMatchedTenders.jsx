@@ -172,6 +172,67 @@ const SmartMatchedTenders = () => {
     return strengths;
   };
 
+  // Get user's display name from profile
+  const getUserDisplayName = (profile) => {
+    if (!profile) {
+      console.log('No profile data available');
+      return 'there';
+    }
+
+    console.log('Profile structure:', JSON.stringify(profile, null, 2));
+
+    // Try different possible structures for first and last name
+    const firstName = profile?.user?.first_name || 
+                      profile?.user?.firstName || 
+                      profile?.first_name || 
+                      profile?.firstName ||
+                      profile?.profile?.first_name;
+    
+    const lastName = profile?.user?.last_name || 
+                     profile?.user?.lastName || 
+                     profile?.last_name || 
+                     profile?.lastName ||
+                     profile?.profile?.last_name;
+
+    if (firstName && lastName) {
+      console.log(`Found user name: ${firstName} ${lastName}`);
+      return `${firstName} ${lastName}`;
+    }
+
+    // Try full name
+    const fullName = profile?.user?.full_name || 
+                     profile?.user?.fullName || 
+                     profile?.full_name || 
+                     profile?.fullName ||
+                     profile?.profile?.full_name;
+    
+    if (fullName) {
+      console.log(`Found full name: ${fullName}`);
+      return fullName;
+    }
+
+    // Try company name
+    const companyName = profile?.company?.name || 
+                       profile?.company?.company_name || 
+                       profile?.companyName;
+    
+    if (companyName) {
+      console.log(`Using company name: ${companyName}`);
+      return companyName;
+    }
+
+    // Try email username as last resort
+    const email = profile?.user?.email || profile?.email;
+    if (email) {
+      const username = email.split('@')[0];
+      console.log(`Using email username: ${username}`);
+      return username;
+    }
+
+    console.log('No identifiable name found, using default');
+    return 'there';
+  };
+
   // Apply filters to matched tenders
   useEffect(() => {
     if (!matchedTenders || matchedTenders.length === 0) {
@@ -349,9 +410,7 @@ const SmartMatchedTenders = () => {
         <div className="container">
           <h1 className="smart-matched-title">Smart Matched Tenders</h1>
           <p className="smart-matched-description">
-            Hi {profileData?.user?.first_name && profileData?.user?.last_name 
-              ? `${profileData.user.first_name} ${profileData.user.last_name}` 
-              : profileData?.company?.name || 'there'}, we have auto-matched your business profile to tender opportunities.
+            Hi {getUserDisplayName(profileData)}, we have auto-matched your business profile to tender opportunities.
           </p>
         </div>
       </header>
