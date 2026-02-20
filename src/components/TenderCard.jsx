@@ -27,6 +27,9 @@ const TenderCard = ({ tender }) => {
   // Extract OCID
   const ocid = tender?.ocid || 'N/A';
   
+  // Extract category
+  const category = tender?.tender?.mainProcurementCategory || tender?.tender?.category || 'General';
+  
   // Extract briefing session information
   const briefingSession = tender?.tender?.briefingSession;
 
@@ -93,12 +96,15 @@ const TenderCard = ({ tender }) => {
           <span className="tender-badge">Tender</span>
           <span className="tender-ocid">{ocid}</span>
         </div>
-        <h3 className="tender-title">{title}</h3>
+        <div className="tender-title-row">
+          <h3 className="tender-title">{title}</h3>
+          <span className="tender-category-badge">{category}</span>
+        </div>
       </div>
       
       <div className="tender-card-body">
         <div className="tender-info-row">
-          <span className="info-label">Buyer:</span>
+          <span className="info-label">Organ Of State:</span>
           <span className="info-value">{buyer}</span>
         </div>
         
