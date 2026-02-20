@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { fetchTenders } from '../lib/api';
+import { batchAnalyzeMatches, generatePortfolioSummary } from '../utils/openaiService';
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -15,6 +16,9 @@ const SmartMatchedTenders = () => {
   const [error, setError] = useState(null);
   const [isWaitingForAuth, setIsWaitingForAuth] = useState(true);
   const [matchingScore, setMatchingScore] = useState({});
+  const [aiAnalysis, setAiAnalysis] = useState(new Map());
+  const [aiSummary, setAiSummary] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
   
   // Filter state
   const [filters, setFilters] = useState({
@@ -107,6 +111,11 @@ const SmartMatchedTenders = () => {
         const matched = matchTendersToProfile(tenders, profile);
         setMatchedTenders(matched);
 
+        // Enhance top matches with AI analysis (run in background)
+        if (matched.length > 0) {
+          enhanceWithAI(matched, profile);
+        }
+
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to load matched tenders');
@@ -117,6 +126,33 @@ const SmartMatchedTenders = () => {
 
     fetchProfileAndTenders();
   }, [authToken]);
+
+  // AI Enhancement - runs in background after initial matching
+  const enhanceWithAI = async (tenders, profile) => {
+    try {
+      setAiLoading(true);
+      console.log('Starting AI enhancement for top tenders...');
+
+      // Analyze top 10 matches with AI
+      const topTenders = tenders.slice(0, 10);
+      const analysis = await batchAnalyzeMatches(topTenders, profile, 10);
+      setAiAnalysis(analysis);
+
+      // Generate portfolio summary
+      const summary = await generatePortfolioSummary(tenders, profile);
+      setAiSummary(summary);
+
+      console.log('AI enhancement complete:', {
+        analyzedCount: analysis.size,
+        hasSummary: !!summary
+      });
+    } catch (err) {
+      console.error('AI enhancement error:', err);
+      // Don't throw - AI is optional enhancement
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   // Extract business strengths from profile
   const getBusinessStrengths = (profile) => {
@@ -617,6 +653,25 @@ const SmartMatchedTenders = () => {
                       Found <strong>{matchedTenders.length}</strong> tender{matchedTenders.length !== 1 ? 's' : ''} that align with your business profile. 
                       Each tender is scored based on relevance to your industry, location, expertise, and business capabilities.
                     </p>
+                    
+                    {/* AI Loading State */}
+                    {aiLoading && (
+                      <div className="ai-loading-notice">
+                        <i className="bi bi-stars spinning"></i>
+                        <span>AI is analyzing your top matches for deeper insights...</span>
+                      </div>
+                    )}
+                    
+                    {/* AI Portfolio Summary */}
+                    {aiSummary && !aiLoading && (
+                      <div className="ai-portfolio-summary">
+                        <div className="ai-summary-header">
+                          <i className="bi bi-robot"></i>
+                          <span>AI Strategic Insights</span>
+                        </div>
+                        <p className="ai-summary-text">{aiSummary}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -797,28 +852,73 @@ const SmartMatchedTenders = () => {
                       <span>{tender.matchScore || 0}</span>
                     </div>
                     
-                    {/* Match Reasons */}
-                    {tender.matchReasons && tender.matchReasons.length > 0 && (
-                      <div className="match-reasons">
-                        <div className="match-reasons-header">
-                          <i className="bi bi-check-circle-fill"></i>
-                          <span>Why this matches you:</span>
-                        </div>
-                        <ul className="match-reasons-list">
-                          {tender.matchReasons.slice(0, 3).map((reason, idx) => (
-                            <li key={idx}>
-                              <i className="bi bi-arrow-right-short"></i>
-                              {reason}
-                            </li>
-                          ))}
-                          {tender.matchReasons.length > 3 && (
-                            <li className="more-reasons">
-                              +{tender.matchReasons.length - 3} more reason{tender.matchReasons.length - 3 !== 1 ? 's' : ''}
-                            </li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
+                    {/* AI-Enhanced Match Reasons */}
+                    {(() => {
+                      const tenderId = tender.ocid || tender.id || `tender-${index}`;
+                      const aiInfo = aiAnalysis.get(tenderId);
+                      
+                      // Show AI analysis if available, otherwise show basic reasons
+                      if (aiInfo && aiInfo.reasons && aiInfo.reasons.length > 0) {
+                        return (
+                          <div className="match-reasons ai-enhanced">
+                            <div className="match-reasons-header">
+                              <i className="bi bi-stars"></i>
+                              <span>AI-Powered Match Analysis:</span>
+                              <span className={`ai-confidence confidence-${aiInfo.confidence}`}>
+                                {aiInfo.confidence} confidence
+                              </span>
+                            </div>
+                            <ul className="match-reasons-list">
+                              {aiInfo.reasons.map((reason, idx) => (
+                                <li key={idx}>
+                                  <i className="bi bi-arrow-right-short"></i>
+                                  {reason}
+                                </li>
+                              ))}
+                            </ul>
+                            {aiInfo.recommendation && (
+                              <div className="ai-recommendation">
+                                <i className="bi bi-lightbulb"></i>
+                                <span>{aiInfo.recommendation}</span>
+                              </div>
+                            )}
+                            {aiInfo.concerns && aiInfo.concerns.length > 0 && (
+                              <div className="ai-concerns">
+                                <i className="bi bi-exclamation-circle"></i>
+                                <span>Consider: {aiInfo.concerns.join(', ')}</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      }
+                      
+                      // Fallback to basic match reasons
+                      if (tender.matchReasons && tender.matchReasons.length > 0) {
+                        return (
+                          <div className="match-reasons">
+                            <div className="match-reasons-header">
+                              <i className="bi bi-check-circle-fill"></i>
+                              <span>Why this matches you:</span>
+                            </div>
+                            <ul className="match-reasons-list">
+                              {tender.matchReasons.slice(0, 3).map((reason, idx) => (
+                                <li key={idx}>
+                                  <i className="bi bi-arrow-right-short"></i>
+                                  {reason}
+                                </li>
+                              ))}
+                              {tender.matchReasons.length > 3 && (
+                                <li className="more-reasons">
+                                  +{tender.matchReasons.length - 3} more reason{tender.matchReasons.length - 3 !== 1 ? 's' : ''}
+                                </li>
+                              )}
+                            </ul>
+                          </div>
+                        );
+                      }
+                      
+                      return null;
+                    })()}
                     
                     <TenderCard tender={tender} />
                   </div>

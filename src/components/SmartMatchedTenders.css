@@ -653,3 +653,184 @@
     gap: 1rem;
   }
 }
+
+/* ============================================
+   AI-Enhanced Match Reasons
+   ============================================ */
+
+.match-reasons.ai-enhanced {
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.05) 0%, rgba(75, 0, 130, 0.05) 100%);
+  border-left-color: var(--purple);
+}
+
+.match-reasons.ai-enhanced .match-reasons-header {
+  color: var(--purple);
+  gap: 0.5rem;
+}
+
+.match-reasons.ai-enhanced .bi-stars {
+  color: var(--purple);
+  animation: sparkle 2s ease-in-out infinite;
+}
+
+@keyframes sparkle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.ai-confidence {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: auto;
+}
+
+.confidence-high {
+  background: rgba(76, 175, 80, 0.1);
+  color: #2e7d32;
+  border: 1px solid rgba(76, 175, 80, 0.3);
+}
+
+.confidence-medium {
+  background: rgba(255, 193, 7, 0.1);
+  color: #f57c00;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+}
+
+.confidence-low {
+  background: rgba(158, 158, 158, 0.1);
+  color: #616161;
+  border: 1px solid rgba(158, 158, 158, 0.3);
+}
+
+.ai-recommendation {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(33, 150, 243, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--blue);
+}
+
+.ai-recommendation i {
+  color: var(--blue);
+  font-size: 1rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.ai-recommendation span {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  line-height: 1.5;
+}
+
+.ai-concerns {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  background: rgba(255, 152, 0, 0.05);
+  border-radius: 8px;
+  border-left: 3px solid var(--orange);
+}
+
+.ai-concerns i {
+  color: var(--orange);
+  font-size: 1rem;
+  margin-top: 0.15rem;
+  flex-shrink: 0;
+}
+
+.ai-concerns span {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* ============================================
+   AI Portfolio Summary
+   ============================================ */
+
+.ai-loading-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  padding: 1rem;
+  background: rgba(138, 43, 226, 0.05);
+  border-radius: 8px;
+  border: 1px dashed var(--purple);
+}
+
+.ai-loading-notice i {
+  color: var(--purple);
+  font-size: 1.25rem;
+}
+
+.ai-loading-notice i.spinning {
+  animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.ai-loading-notice span {
+  font-size: 0.9rem;
+  color: var(--purple);
+  font-weight: 500;
+}
+
+.ai-portfolio-summary {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  background: linear-gradient(135deg, rgba(138, 43, 226, 0.08) 0%, rgba(75, 0, 130, 0.08) 100%);
+  border-radius: 12px;
+  border: 1px solid rgba(138, 43, 226, 0.2);
+  box-shadow: 0 2px 8px rgba(138, 43, 226, 0.1);
+}
+
+.ai-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.ai-summary-header i {
+  font-size: 1.25rem;
+  color: var(--purple);
+}
+
+.ai-summary-header span {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--purple);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ai-summary-text {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--text-dark);
+  margin: 0;
+  font-style: italic;
+}
+
+/* CSS Variables for new colors */
+:root {
+  --purple: #8a2be2;
+  --blue: #2196f3;
+  --orange: #ff9800;
+}
+
