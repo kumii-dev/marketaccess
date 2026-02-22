@@ -114,11 +114,11 @@ const SmartMatchedTenders = () => {
           return; // Skip fetching
         }
 
-        // PHASE 1: Quick initial load (50 tenders)
-        console.log('🚀 Phase 1: Loading initial 50 tenders...');
+        // PHASE 1: Quick initial load (10 tenders)
+        console.log('🚀 Phase 1: Loading initial 10 tenders...');
         const initialData = await fetchTenders({
           page: 1,
-          limit: 50,
+          limit: 10,
           dateFrom,
           dateTo
         });
@@ -137,7 +137,7 @@ const SmartMatchedTenders = () => {
           setAllTenders(initialTenders);
           const initialMatched = matchTendersToProfile(initialTenders, profile);
           setMatchedTenders(initialMatched);
-          setLoadingProgress({ current: 50, total: 250, percentage: 20 });
+          setLoadingProgress({ current: 10, total: 100, percentage: 10 });
           
           console.log(`✅ Initial ${initialTenders.length} tenders loaded and matched`);
         }
@@ -145,15 +145,20 @@ const SmartMatchedTenders = () => {
         // Initial loading complete - user can see results now
         setLoading(false);
 
-        // PHASE 2: Progressive background loading (200 more tenders in batches)
+        // PHASE 2: Progressive background loading (90 more tenders in batches of 10)
         console.log('🔄 Phase 2: Loading additional tenders in background...');
         setIsLoadingMore(true);
         
         const batches = [
-          { page: 2, limit: 50 }, // 51-100
-          { page: 3, limit: 50 }, // 101-150
-          { page: 4, limit: 50 }, // 151-200
-          { page: 5, limit: 50 }  // 201-250
+          { page: 2, limit: 10 },  // 11-20
+          { page: 3, limit: 10 },  // 21-30
+          { page: 4, limit: 10 },  // 31-40
+          { page: 5, limit: 10 },  // 41-50
+          { page: 6, limit: 10 },  // 51-60
+          { page: 7, limit: 10 },  // 61-70
+          { page: 8, limit: 10 },  // 71-80
+          { page: 9, limit: 10 },  // 81-90
+          { page: 10, limit: 10 }  // 91-100
         ];
 
         for (let i = 0; i < batches.length; i++) {
@@ -195,11 +200,11 @@ const SmartMatchedTenders = () => {
                 return combined;
               });
 
-              const currentCount = 50 + (i + 1) * 50;
-              const percentage = Math.round((currentCount / 250) * 100);
-              setLoadingProgress({ current: currentCount, total: 250, percentage });
+              const currentCount = 10 + (i + 1) * 10;
+              const percentage = Math.round((currentCount / 100) * 100);
+              setLoadingProgress({ current: currentCount, total: 100, percentage });
               
-              console.log(`📦 Batch ${i + 1}/4 loaded: +${batchTenders.length} tenders (Total: ${currentCount})`);
+              console.log(`📦 Batch ${i + 1}/9 loaded: +${batchTenders.length} tenders (Total: ${currentCount})`);
             }
 
             // Small delay between batches to avoid overwhelming the API
