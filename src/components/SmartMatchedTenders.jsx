@@ -142,9 +142,16 @@ const SmartMatchedTenders = () => {
           setAllTenders(initialTenders);
           const initialMatched = matchTendersToProfile(initialTenders, profile);
           setMatchedTenders(initialMatched);
+          latestMatchedRef.current = initialMatched; // Store for AI enhancement
           setLoadingProgress({ current: 10, total: 100, percentage: 10 });
           
           console.log(`✅ Initial ${initialTenders.length} tenders loaded and matched`);
+          
+          // Start AI enhancement immediately with first 10 tenders
+          if (initialMatched.length > 0) {
+            console.log('🤖 Starting early AI enhancement with initial tenders...');
+            enhanceWithAI(initialMatched, profile);
+          }
         }
 
         // Initial loading complete - user can see results now
@@ -224,17 +231,12 @@ const SmartMatchedTenders = () => {
 
         setIsLoadingMore(false);
         console.log('✅ All tenders loaded successfully');
-
-        // PHASE 3: AI Enhancement (use ref to get latest matches)
-        console.log('🔍 Checking if AI enhancement should run...');
-        console.log('latestMatchedRef.current:', latestMatchedRef.current ? `${latestMatchedRef.current.length} tenders` : 'null/undefined');
-        console.log('profile:', profile ? 'exists' : 'null/undefined');
         
+        // AI enhancement already ran after Phase 1, but we can update it with all tenders now
+        console.log('� Updating AI enhancement with all loaded tenders...');
         if (latestMatchedRef.current && latestMatchedRef.current.length > 0) {
-          console.log('✅ Conditions met, calling enhanceWithAI...');
+          console.log(`✅ Re-running AI enhancement with ${latestMatchedRef.current.length} total matched tenders`);
           enhanceWithAI(latestMatchedRef.current, profile);
-        } else {
-          console.warn('⚠️ Skipping AI enhancement - no matched tenders or missing profile');
         }
 
       } catch (err) {
