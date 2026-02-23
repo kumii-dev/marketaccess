@@ -872,7 +872,7 @@
   width: 100%;
   max-width: 400px;
   height: 8px;
-  background: rgba(33, 150, 243, 0.1);
+  background: rgba(128, 243, 33, 0.1);
   border-radius: 10px;
   overflow: hidden;
   position: relative;
@@ -883,7 +883,7 @@
   background: linear-gradient(90deg, var(--blue) 0%, var(--sage-green) 100%);
   border-radius: 10px;
   transition: width 0.5s ease-in-out;
-  box-shadow: 0 0 10px rgba(33, 150, 243, 0.3);
+  box-shadow: 0 0 10px rgba(121, 243, 33, 0.3);
 }
 
 .progress-text {
@@ -894,11 +894,11 @@
 
 /* AI-Extracted Keywords Section */
 .extracted-keywords-section {
-  background: linear-gradient(135deg, #f3e7ff 0%, #e7f3ff 100%);
+  background: linear-gradient(135deg, #f4ffe7 0%, #e7ffe9 100%);
   border-radius: 10px;
   padding: 1.25rem;
   margin: 1.5rem 0;
-  border: 2px solid #d4c5f9;
+  border: 2px solid #c5f9dc;
 }
 
 .keywords-header {
@@ -906,7 +906,7 @@
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  color: #6b46c1;
+  color: #2e352c;
   font-weight: 600;
   font-size: 0.95rem;
 }
@@ -933,18 +933,18 @@
   align-items: center;
   gap: 0.35rem;
   padding: 0.5rem 1rem;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #9adf85 0%, #5e914d 100%);
   color: white;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 500;
-  box-shadow: 0 2px 6px rgba(139, 92, 246, 0.3);
+  box-shadow: 0 2px 6px rgba(128, 246, 92, 0.3);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .keyword-badge:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(139, 92, 246, 0.4);
+  box-shadow: 0 4px 10px rgba(164, 246, 92, 0.4);
 }
 
 .keyword-badge i {
@@ -953,18 +953,18 @@
 
 .keywords-description {
   font-size: 0.85rem;
-  color: #6b46c1;
+  color: #2c3f2c;
   margin: 0;
   font-style: italic;
 }
 
 /* Matched Keywords Display in Tender Cards */
 .keyword-matches {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(164, 246, 92, 0.08);
   border-radius: 8px;
   padding: 0.75rem;
   margin: 0.75rem 0;
-  border-left: 3px solid #8b5cf6;
+  border-left: 3px solid #73b863;
 }
 
 .keyword-matches-label {
@@ -973,7 +973,7 @@
   gap: 0.4rem;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #6b46c1;
+  color: #2c5a20;
   margin-bottom: 0.5rem;
 }
 
@@ -991,12 +991,12 @@
 .matched-keyword {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #96d780 0%, #83bb65 100%);
   color: white;
   border-radius: 15px;
   font-size: 0.8rem;
   font-weight: 500;
-  box-shadow: 0 2px 4px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 2px 4px rgba(118, 246, 92, 0.2);
 }
 
 
