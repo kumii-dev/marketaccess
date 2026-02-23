@@ -889,59 +889,190 @@ const SmartMatchedTenders = () => {
       'categories'
     ]) || [];
     
-    // Backward compatibility: Map old generic categories to new specific categories
+    // Extended category fallbacks: Map business keywords/terms to tender categories
     const categoryFallbacks = {
-      'goods': [
-        'Manufacturing',
-        'Supplies: General',
-        'Supplies: Computer Equipment',
-        'Supplies: Electrical Equipment',
-        'Supplies: Medical',
-        'Supplies: Perishable Provisions',
-        'Supplies: Stationery/Printing',
-        'Supplies: Clothing/Textiles/Footwear',
-        'Other manufacturing'
-      ],
-      'services': [
-        'Professional, scientific and technical activities',
-        'Services: General',
-        'Services: Professional',
-        'Services: Building',
-        'Services: Civil',
-        'Services: Electrical',
-        'Services: Functional (Including Cleaning and Security Services)',
-        'Administrative and support activities',
-        'Information and communication',
-        'Other service activities'
-      ],
-      'works': [
-        'Construction',
-        'Construction of buildings',
-        'Civil engineering',
-        'Specialised construction activities',
-        'Services: Building',
-        'Services: Civil'
-      ],
-      'consultingServices': [
-        'Activities of head offices; management consultancy activities',
-        'Professional, scientific and technical activities',
-        'Services: Professional',
-        'Other professional, scientific and technical activities'
-      ]
+      // Legacy backward compatibility
+      'goods': ['Manufacturing', 'Supplies: General', 'Supplies: Computer Equipment', 'Supplies: Electrical Equipment', 'Supplies: Medical', 'Supplies: Perishable Provisions', 'Supplies: Stationery/Printing', 'Supplies: Clothing/Textiles/Footwear', 'Other manufacturing'],
+      'services': ['Professional, scientific and technical activities', 'Services: General', 'Services: Professional', 'Services: Building', 'Services: Civil', 'Services: Electrical', 'Services: Functional (Including Cleaning and Security Services)', 'Administrative and support activities', 'Information and communication', 'Other service activities'],
+      'works': ['Construction', 'Construction of buildings', 'Civil engineering', 'Specialised construction activities', 'Services: Building', 'Services: Civil'],
+      'consultingServices': ['Activities of head offices; management consultancy activities', 'Professional, scientific and technical activities', 'Services: Professional', 'Other professional, scientific and technical activities'],
+      
+      // Technology & IT
+      'technology': ['Computer programming, consultancy and related activities', 'Information and communication', 'Telecommunications', 'Information service activities', 'Manufacture of computer, electronic and optical products'],
+      'software': ['Computer programming, consultancy and related activities', 'Information and communication', 'Information service activities'],
+      'it': ['Computer programming, consultancy and related activities', 'Information and communication', 'Telecommunications', 'Supplies: Computer Equipment'],
+      'computer': ['Computer programming, consultancy and related activities', 'Manufacture of computer, electronic and optical products', 'Supplies: Computer Equipment'],
+      'programming': ['Computer programming, consultancy and related activities', 'Information service activities'],
+      'telecommunications': ['Telecommunications', 'Information and communication'],
+      
+      // Construction & Engineering
+      'construction': ['Construction', 'Construction of buildings', 'Civil engineering', 'Specialised construction activities', 'Services: Building', 'Services: Civil'],
+      'building': ['Construction of buildings', 'Services: Building', 'Specialised construction activities'],
+      'civil': ['Civil engineering', 'Services: Civil'],
+      'engineering': ['Architectural and engineering activities; technical testing and analysis', 'Civil engineering', 'Services: Civil', 'Services: Building'],
+      'architecture': ['Architectural and engineering activities; technical testing and analysis', 'Professional, scientific and technical activities'],
+      'electrical': ['Manufacture of electrical equipment', 'Services: Electrical', 'Supplies: Electrical Equipment'],
+      
+      // Manufacturing & Production
+      'manufacturing': ['Manufacturing', 'Other manufacturing'],
+      'production': ['Manufacturing', 'Other manufacturing'],
+      'metal': ['Manufacture of basic metals', 'Manufacture of fabricated metal products, except machinery and equipment'],
+      'steel': ['Manufacture of basic metals', 'Manufacture of fabricated metal products, except machinery and equipment'],
+      'machinery': ['Manufacture of machinery and equipment n.e.c.', 'Repair and installation of machinery and equipment'],
+      'automotive': ['Manufacture of motor vehicles, trailers and semi-trailers', 'Wholesale and retail trade and repair of motor vehicles and motorcycles'],
+      'vehicles': ['Manufacture of motor vehicles, trailers and semi-trailers', 'Wholesale and retail trade and repair of motor vehicles and motorcycles'],
+      'furniture': ['Manufacture of furniture'],
+      'textiles': ['Manufacture of textiles', 'Supplies: Clothing/Textiles/Footwear'],
+      'clothing': ['Supplies: Clothing/Textiles/Footwear', 'Manufacture of textiles'],
+      'chemical': ['Manufacture of chemicals and chemical products'],
+      'pharmaceutical': ['Manufacture of chemicals and chemical products', 'Supplies: Medical'],
+      'plastics': ['Manufacture of rubber and plastics products'],
+      'rubber': ['Manufacture of rubber and plastics products'],
+      'paper': ['Manufacture of paper and paper products', 'Printing and reproduction of recorded media'],
+      
+      // Healthcare & Medical
+      'health': ['Human health activities', 'Human health and social work activities', 'Supplies: Medical'],
+      'healthcare': ['Human health activities', 'Human health and social work activities', 'Supplies: Medical'],
+      'medical': ['Supplies: Medical', 'Human health activities', 'Manufacture of chemicals and chemical products'],
+      'hospital': ['Human health activities', 'Supplies: Medical'],
+      
+      // Professional Services
+      'consulting': ['Activities of head offices; management consultancy activities', 'Services: Professional', 'Professional, scientific and technical activities'],
+      'legal': ['Legal and accounting activities', 'Professional, scientific and technical activities'],
+      'accounting': ['Legal and accounting activities', 'Professional, scientific and technical activities'],
+      'financial': ['Financial and insurance activities', 'Financial service activities, except insurance and pension funding'],
+      'insurance': ['Insurance, reinsurance and pension funding, except compulsory social security', 'Financial and insurance activities'],
+      'management': ['Activities of head offices; management consultancy activities', 'Office administrative, office support and other business support activities'],
+      'research': ['Scientific research and development', 'Professional, scientific and technical activities', 'Other professional, scientific and technical activities'],
+      
+      // Education & Training
+      'education': ['Education'],
+      'training': ['Education', 'Other professional, scientific and technical activities'],
+      
+      // Transport & Logistics
+      'transport': ['Transportation and storage', 'Land transport and transport via pipelines', 'Air transport', 'Water transport'],
+      'logistics': ['Transportation and storage', 'Warehousing and support activities for transportation'],
+      'shipping': ['Water transport', 'Warehousing and support activities for transportation'],
+      'freight': ['Transportation and storage', 'Warehousing and support activities for transportation'],
+      'warehousing': ['Warehousing and support activities for transportation', 'Transportation and storage'],
+      
+      // Energy & Utilities
+      'energy': ['Electricity, gas, steam and air conditioning', 'Manufacture of coke and refined petroleum products'],
+      'electricity': ['Electricity, gas, steam and air conditioning'],
+      'power': ['Electricity, gas, steam and air conditioning'],
+      'water': ['Water collection, treatment and supply', 'Water supply; sewerage, waste management and remediation activities'],
+      'waste': ['Waste collection, treatment and disposal activities; materials recovery', 'Water supply; sewerage, waste management and remediation activities'],
+      'sewerage': ['Sewerage', 'Water supply; sewerage, waste management and remediation activities'],
+      'environmental': ['Remediation activities and other waste management services', 'Water supply; sewerage, waste management and remediation activities'],
+      
+      // Mining & Resources
+      'mining': ['Mining and quarrying', 'Mining of coal and lignite', 'Mining support service activities'],
+      'coal': ['Mining of coal and lignite', 'Mining and quarrying'],
+      'quarrying': ['Mining and quarrying'],
+      
+      // Media & Entertainment
+      'media': ['Motion picture, video and television programme production, sound recording and music publishing activities', 'Programming and broadcasting activities', 'Publishing activities'],
+      'entertainment': ['Arts, entertainment and recreation', 'Creative, arts and entertainment activities', 'Sports activities and amusement and recreation activities'],
+      'broadcasting': ['Programming and broadcasting activities', 'Information and communication'],
+      'publishing': ['Publishing activities', 'Printing and reproduction of recorded media'],
+      'printing': ['Printing and reproduction of recorded media', 'Supplies: Stationery/Printing'],
+      
+      // Accommodation & Food
+      'accommodation': ['Accommodation'],
+      'hotel': ['Accommodation'],
+      'tourism': ['Accommodation', 'Travel agency, tour operator, reservation service and related activities'],
+      'travel': ['Travel agency, tour operator, reservation service and related activities', 'Air transport'],
+      'food': ['Food and beverage service activities', 'Supplies: Perishable Provisions'],
+      'catering': ['Food and beverage service activities', 'Supplies: Perishable Provisions'],
+      
+      // Facilities & Support Services
+      'security': ['Security and investigation activities', 'Services: Functional (Including Cleaning and Security Services)'],
+      'cleaning': ['Services to buildings and landscape activities', 'Services: Functional (Including Cleaning and Security Services)'],
+      'maintenance': ['Services to buildings and landscape activities', 'Repair and installation of machinery and equipment'],
+      'facilities': ['Services to buildings and landscape activities', 'Services: Functional (Including Cleaning and Security Services)'],
+      'landscaping': ['Services to buildings and landscape activities'],
+      
+      // Real Estate & Rental
+      'property': ['Real estate activities'],
+      'realestate': ['Real estate activities'],
+      'rental': ['Rental and leasing activities'],
+      'leasing': ['Rental and leasing activities'],
+      
+      // Marketing & Advertising
+      'marketing': ['Advertising and market research', 'Other professional, scientific and technical activities'],
+      'advertising': ['Advertising and market research'],
+      
+      // Agriculture
+      'agriculture': ['Agricultural Products and Services'],
+      'farming': ['Agricultural Products and Services'],
+      'agri': ['Agricultural Products and Services'],
+      
+      // Administrative & HR
+      'administrative': ['Administrative and support activities', 'Office administrative, office support and other business support activities'],
+      'hr': ['Employment activities', 'Administrative and support activities'],
+      'recruitment': ['Employment activities', 'Administrative and support activities'],
+      'employment': ['Employment activities'],
+      
+      // Supplies
+      'stationery': ['Supplies: Stationery/Printing'],
+      'office': ['Supplies: Stationery/Printing', 'Office administrative, office support and other business support activities'],
+      'medical supplies': ['Supplies: Medical'],
+      'equipment': ['Supplies: General', 'Supplies: Computer Equipment', 'Supplies: Electrical Equipment'],
+      
+      // Social & Care
+      'social': ['Human health and social work activities', 'Residential care activities'],
+      'care': ['Residential care activities', 'Human health and social work activities'],
+      'domestic': ['Activities of households as employers of domestic personnel'],
+      
+      // Cultural
+      'cultural': ['Libraries, archives, museums and other cultural activities', 'Arts, entertainment and recreation'],
+      'museum': ['Libraries, archives, museums and other cultural activities'],
+      'library': ['Libraries, archives, museums and other cultural activities'],
+      'arts': ['Creative, arts and entertainment activities', 'Arts, entertainment and recreation'],
+      'sports': ['Sports activities and amusement and recreation activities'],
+      
+      // Communication
+      'postal': ['Postal and courier activities'],
+      'courier': ['Postal and courier activities']
     };
     
-    // Expand profile categories with fallbacks for old categories
-    const expandedProfileCategories = [...profileCategories];
+    // Expand profile categories with fallbacks
+    const expandedProfileCategories = new Set([...profileCategories]);
+    
+    // 1. Direct category expansion (backward compatibility)
     profileCategories.forEach(cat => {
       const catLower = (cat || '').toLowerCase();
       if (categoryFallbacks[catLower]) {
-        expandedProfileCategories.push(...categoryFallbacks[catLower]);
+        categoryFallbacks[catLower].forEach(c => expandedProfileCategories.add(c));
       }
     });
     
+    // 2. Keyword-based category expansion (NEW: map profile keywords to categories)
+    profileKeywords.forEach(keyword => {
+      const keywordLower = keyword.toLowerCase();
+      if (categoryFallbacks[keywordLower]) {
+        categoryFallbacks[keywordLower].forEach(c => expandedProfileCategories.add(c));
+      }
+    });
+    
+    // 3. Partial keyword matching for compound terms (e.g., "software development" → "software")
+    profileKeywords.forEach(keyword => {
+      const keywordLower = keyword.toLowerCase();
+      Object.keys(categoryFallbacks).forEach(fallbackKey => {
+        if (keywordLower.includes(fallbackKey) || fallbackKey.includes(keywordLower)) {
+          categoryFallbacks[fallbackKey].forEach(c => expandedProfileCategories.add(c));
+        }
+      });
+    });
+    
+    // Convert Set back to Array for matching
+    const expandedCategoriesArray = Array.from(expandedProfileCategories);
+    
     console.log('Profile province:', profileProvince);
     console.log('Profile categories (original):', profileCategories);
-    console.log('Profile categories (expanded):', expandedProfileCategories);
+    console.log('Profile keywords:', profileKeywords.slice(0, 20)); // Show first 20
+    console.log('Profile categories (expanded from keywords):', expandedCategoriesArray.length, 'categories');
+    console.log('Sample expanded categories:', expandedCategoriesArray.slice(0, 10));
 
     // Score each tender (using deduplicated list)
     const scoredTenders = uniqueTenders.map(tender => {
@@ -969,7 +1100,7 @@ const SmartMatchedTenders = () => {
 
       // Category matching (with backward compatibility for old categories)
       const tenderCategory = tender.tender?.mainProcurementCategory || tender.tender?.category;
-      if (tenderCategory && Array.isArray(expandedProfileCategories) && expandedProfileCategories.includes(tenderCategory)) {
+      if (tenderCategory && expandedCategoriesArray.length > 0 && expandedCategoriesArray.includes(tenderCategory)) {
         score += 30;
         reasons.push(`Category match: ${tenderCategory}`);
       }
