@@ -220,10 +220,15 @@ const SmartMatchedTenders = () => {
               
               console.log(`📦 Batch ${i + 1}/9 loaded: +${batchTenders.length} tenders (Total: ${currentCount})`);
               
-              // Run AI enhancement after each batch with updated matches
-              if (updatedMatched.length > 0) {
-                console.log(`🤖 Running AI enhancement for batch ${i + 1}/9 with ${updatedMatched.length} matched tenders`);
+              // Run AI enhancement on batches 1, 3, 5, 7, and 9 (every other batch + last)
+              const batchNumber = i + 1;
+              const shouldRunAI = batchNumber === 1 || batchNumber === 3 || batchNumber === 5 || batchNumber === 7 || batchNumber === 9;
+              
+              if (shouldRunAI && updatedMatched.length > 0) {
+                console.log(`🤖 Running AI enhancement for batch ${batchNumber}/9 with ${updatedMatched.length} matched tenders`);
                 enhanceWithAI(updatedMatched, profile);
+              } else if (updatedMatched.length > 0) {
+                console.log(`⏭️ Skipping AI enhancement for batch ${batchNumber}/9 (will run on batches 1,3,5,7,9)`);
               }
             }
 
