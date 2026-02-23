@@ -18,8 +18,16 @@ export async function extractKeywordsFromBio(bioText, profile) {
     return [];
   }
 
-  if (!bioText || bioText.trim().length === 0) {
-    console.warn('No bio text provided for keyword extraction');
+  // Loosened dependency: Allow empty bio if profile context exists
+  const hasProfileContext = profile && (
+    profile.startup?.industry || 
+    profile.profile?.industry_sectors ||
+    (profile.profile?.skills && profile.profile.skills.length > 0) ||
+    (profile.profile?.interests && profile.profile.interests.length > 0)
+  );
+
+  if ((!bioText || bioText.trim().length === 0) && !hasProfileContext) {
+    console.warn('No bio text or profile context available for keyword extraction');
     return [];
   }
 
@@ -31,7 +39,11 @@ export async function extractKeywordsFromBio(bioText, profile) {
       location: profile.startup?.location || profile.profile?.location || 'Not specified'
     };
 
-    const prompt = `Analyze this business bio/description and extract EXACTLY 5 keywords that are most relevant for matching government tenders.
+    // Adjust prompt based on what data is available
+    const hasBio = bioText && bioText.trim().length > 0;
+    
+    const prompt = hasBio 
+      ? `Analyze this business bio/description and extract EXACTLY 5 keywords that are most relevant for matching government tenders.
 
 BIO/DESCRIPTION:
 ${bioText}
@@ -49,6 +61,24 @@ Requirements:
 4. Prioritize terms that would appear in tender descriptions
 5. Avoid generic terms like "quality", "professional", "excellence"
 6. Exclude common prepositions, conjunctions, and coordinating link words in English grammar - only return meaningful keywords that would help identify relevant tenders.
+
+Respond with ONLY a JSON array of strings, nothing else.
+Example: ["construction", "infrastructure", "project management", "civil engineering", "municipal services"]`
+      : `Extract EXACTLY 5 keywords from this profile context that are most relevant for matching government tenders.
+
+PROFILE CONTEXT:
+- Industry: ${userContext.industry}
+- Skills: ${userContext.skills.join(', ')}
+- Interests: ${userContext.interests.join(', ')}
+- Location: ${userContext.location}
+
+Requirements:
+1. Return EXACTLY 5 keywords (no more)
+2. Focus on: industries, capabilities, expertise areas that match government tender categories
+3. Use specific, actionable terms (e.g., "construction", "software development", "consulting")
+4. Prioritize terms that would appear in tender descriptions
+5. Avoid generic terms like "quality", "professional", "excellence"
+6. Extract from industry, skills, and interests fields
 
 Respond with ONLY a JSON array of strings, nothing else.
 Example: ["construction", "infrastructure", "project management", "civil engineering", "municipal services"]`;

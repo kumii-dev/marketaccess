@@ -429,7 +429,7 @@ const SmartMatchedTenders = () => {
       setAiLoading(true);
       console.log('🤖 Starting AI enhancement with keyword-based analysis...');
 
-      // Step 1: Extract keywords from bio/description
+      // Step 1: Extract keywords from bio/description or profile data
       // Try to get bio or description from profile
       let bio = profile?.profile?.bio || profile?.bio || '';
       
@@ -438,10 +438,24 @@ const SmartMatchedTenders = () => {
         bio = profile?.startup?.description || profile?.description || '';
       }
 
+      // If still no bio, construct from profile data (LOOSENED DEPENDENCY)
       if (!bio || bio.trim().length === 0) {
-        console.warn('⚠️ No bio/description found in profile, skipping AI enhancement');
-        setAiLoading(false);
-        return;
+        console.log('⚠️ No bio/description found, constructing from profile data...');
+        const industry = profile?.startup?.industry || profile?.profile?.industry_sectors || '';
+        const skills = profile?.profile?.skills || [];
+        const interests = profile?.profile?.interests || [];
+        const location = profile?.startup?.location || profile?.profile?.location || '';
+        
+        // Build a synthetic bio from available data
+        bio = `${industry} ${Array.isArray(skills) ? skills.join(' ') : skills} ${Array.isArray(interests) ? interests.join(' ') : interests} ${location}`.trim();
+        
+        if (bio.length > 0) {
+          console.log('✅ Constructed bio from profile data:', bio.substring(0, 100) + '...');
+        } else {
+          console.warn('⚠️ No profile data available for AI analysis, skipping');
+          setAiLoading(false);
+          return;
+        }
       }
 
       console.log('📝 Extracting keywords from bio/description...');
@@ -499,7 +513,7 @@ const SmartMatchedTenders = () => {
         // Delay between batches to respect rate limits (reduced from 1000ms to 300ms for faster processing)
         if (i < batches.length - 1) {
           console.log('⏳ Waiting before next batch...');
-          await new Promise(resolve => setTimeout(resolve, 300));
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
 
