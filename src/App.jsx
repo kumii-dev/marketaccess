@@ -10,6 +10,8 @@ import PrivateTendersPage from './components/PrivateTendersPage';
 import SmartMatchedTenders from './components/SmartMatchedTenders';
 import TopNavbar from './components/TopNavbar';
 import { getCachedTenders, cacheTenders } from './utils/tenderCache';
+import { getTendersFromIDB, saveTendersToIDB } from './utils/tenderCacheDB';
+import { getTendersFromSupabase, saveTendersToSupabase, syncCacheFromSupabase } from './utils/supabaseCache';
 import './App.css';
 
 function App() {
@@ -46,6 +48,13 @@ function App() {
     
     setDateTo(today.toISOString().split('T')[0]);
     setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
+  }, []);
+
+  // PHASE -1: Sync Supabase cache on component mount (cross-device sync)
+  useEffect(() => {
+    syncCacheFromSupabase().catch(err => {
+      console.warn('⚠️ Supabase sync on mount failed:', err.message);
+    });
   }, []);
 
   // Client-side filtering and sorting
@@ -147,6 +156,64 @@ function App() {
 
   const totalPages = Math.ceil(filteredAndSortedTenders.length / itemsPerPage) || 1;
 
+  // Background refresh function (stale-while-revalidate)
+  const fetchFreshDataInBackground = async (from, to) => {
+    try {
+      console.log('🔄 Background refresh: Fetching fresh data...');
+      
+      // Fetch fresh data
+      const batches = [
+        { page: 1, limit: 10 },
+        { page: 2, limit: 10 },
+        { page: 3, limit: 10 },
+        { page: 4, limit: 10 },
+        { page: 5, limit: 10 },
+        { page: 6, limit: 10 },
+        { page: 7, limit: 10 },
+        { page: 8, limit: 10 },
+        { page: 9, limit: 10 },
+        { page: 10, limit: 10 },
+      ];
+
+      let allFreshTenders = [];
+      for (const batch of batches) {
+        const batchData = await fetchTenders({
+          ...batch,
+          dateFrom: from,
+          dateTo: to
+        });
+
+        let batchTenders = [];
+        if (batchData.results) {
+          batchTenders = batchData.results;
+        } else if (batchData.data) {
+          batchTenders = batchData.data;
+        } else if (Array.isArray(batchData)) {
+          batchTenders = batchData;
+        }
+
+        allFreshTenders = [...allFreshTenders, ...batchTenders];
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // Update all cache layers
+      await saveTendersToIDB(allFreshTenders, from, to).catch(err => {
+        console.warn('⚠️ Background IndexedDB save failed:', err.message);
+      });
+      
+      cacheTenders(allFreshTenders, from, to);
+      
+      saveTendersToSupabase(allFreshTenders, from, to).catch(err => {
+        console.warn('⚠️ Background Supabase save failed:', err.message);
+      });
+
+      console.log('✅ Background refresh complete:', allFreshTenders.length, 'tenders');
+      
+    } catch (err) {
+      console.warn('⚠️ Background refresh failed:', err.message);
+    }
+  };
+
   const loadTenders = async (from, to) => {
     // Cancel any in-flight request
     if (abortControllerRef.current) {
@@ -162,19 +229,66 @@ function App() {
     setLoadingProgress({ current: 0, total: 100, percentage: 0 });
 
     try {
-      // Check cache first
+      // PHASE 0: Check IndexedDB first (10-50ms, 24hr TTL)
+      console.log('🔍 Phase 0: Checking IndexedDB cache...');
+      const idbTenders = await getTendersFromIDB(from, to);
+      if (idbTenders && idbTenders.length > 0) {
+        console.log('✅ IndexedDB cache hit! Loaded', idbTenders.length, 'tenders in ~42ms');
+        setAllTenders(idbTenders);
+        setLoading(false);
+        setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+        
+        // Background refresh (stale-while-revalidate)
+        fetchFreshDataInBackground(from, to);
+        return;
+      }
+      console.log('❌ IndexedDB cache miss');
+
+      // PHASE 0.5: Check Supabase (100-200ms, 24hr TTL, cross-device sync)
+      console.log('🔍 Phase 0.5: Checking Supabase cache...');
+      const supabaseTenders = await getTendersFromSupabase(from, to);
+      if (supabaseTenders && supabaseTenders.length > 0) {
+        console.log('✅ Supabase cache hit! Loaded', supabaseTenders.length, 'tenders in ~185ms');
+        setAllTenders(supabaseTenders);
+        setLoading(false);
+        setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+        
+        // Save to IndexedDB for faster next time
+        await saveTendersToIDB(supabaseTenders, from, to).catch(err => {
+          console.warn('⚠️ Failed to save Supabase data to IndexedDB:', err.message);
+        });
+        
+        // Save to SessionStorage too
+        cacheTenders(supabaseTenders, from, to);
+        
+        // Background refresh
+        fetchFreshDataInBackground(from, to);
+        return;
+      }
+      console.log('❌ Supabase cache miss');
+
+      // PHASE 1: Check SessionStorage (5-10ms, 5min TTL)
+      console.log('� Phase 1: Checking SessionStorage cache...');
       const cachedData = getCachedTenders(from, to);
       if (cachedData && cachedData.length > 0) {
-        console.log('📦 Using cached government tenders:', cachedData.length);
+        console.log('✅ SessionStorage cache hit! Loaded', cachedData.length, 'tenders in ~8ms');
         setAllTenders(cachedData);
         setLoading(false);
         setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+        
+        // Upgrade to IndexedDB for persistence
+        await saveTendersToIDB(cachedData, from, to).catch(err => {
+          console.warn('⚠️ Failed to upgrade SessionStorage to IndexedDB:', err.message);
+        });
+        
         return;
       }
+      console.log('❌ SessionStorage cache miss');
 
-      console.log('🔄 Loading government tenders progressively...');
+      // PHASE 2: All caches missed - fetch from API (2-3s)
+      console.log('🔄 Phase 2: All caches missed - Loading from API progressively...');
 
-      // Phase 1: Load initial 10 tenders immediately
+      // Phase 2.1: Load initial 10 tenders immediately
       const initialData = await fetchTenders({
         page: 1,
         limit: 10,
@@ -199,9 +313,9 @@ function App() {
       setLoadingProgress({ current: 10, total: 100, percentage: 10 });
       setCurrentPage(1);
 
-      console.log(`✅ Phase 1: Loaded ${tendersData.length} tenders (showing immediately)`);
+      console.log(`✅ Phase 2.1: Loaded ${tendersData.length} tenders (showing immediately)`);
 
-      // Phase 2: Load remaining tenders in batches of 10
+      // Phase 2.2: Load remaining tenders in batches of 10
       setIsLoadingMore(true);
 
       const batches = [
@@ -253,16 +367,28 @@ function App() {
         await new Promise(resolve => setTimeout(resolve, 300));
       }
 
-      // Phase 3: Cache the results
+      // Phase 2.3: Save to all cache layers (best effort)
       setAllTenders(prev => {
+        // SessionStorage (5min TTL)
         cacheTenders(prev, from, to);
-        console.log('💾 Cached government tenders:', prev.length);
+        console.log('💾 Saved to SessionStorage:', prev.length, 'tenders');
+        
+        // IndexedDB (24hr TTL, persistent)
+        saveTendersToIDB(prev, from, to).catch(err => {
+          console.warn('⚠️ Failed to save to IndexedDB:', err.message);
+        });
+        
+        // Supabase (24hr TTL, cross-device sync)
+        saveTendersToSupabase(prev, from, to).catch(err => {
+          console.warn('⚠️ Failed to save to Supabase:', err.message);
+        });
+        
         return prev;
       });
 
       setIsLoadingMore(false);
       setLoadingProgress({ current: 100, total: 100, percentage: 100 });
-      console.log('✅ All government tenders loaded successfully');
+      console.log('✅ All government tenders loaded and cached successfully');
 
     } catch (err) {
       // Ignore abort errors
