@@ -310,10 +310,11 @@ function App() {
       // PHASE 2: All caches missed - fetch from API (2-3s)
       console.log('🔄 Phase 2: All caches missed - Loading from API progressively...');
 
-      // Phase 2.1: Load initial 10 tenders immediately
-      const initialData = await fetchTenders({
+      // Phase 2.1a: Load first 5 tenders ASAP (optimize FCP, LCP, TTI)
+      console.log('🚀 Phase 2.1a: Loading first 5 tenders for fast FCP...');
+      const microBatch1 = await fetchTenders({
         page: 1,
-        limit: 10,
+        limit: 5,
         dateFrom: from,
         dateTo: to,
         signal: abortController.signal
@@ -321,21 +322,48 @@ function App() {
 
       if (abortController.signal.aborted) return;
 
-      let tendersData = [];
-      if (initialData.results) {
-        tendersData = initialData.results;
-      } else if (initialData.data) {
-        tendersData = initialData.data;
-      } else if (Array.isArray(initialData)) {
-        tendersData = initialData;
+      let firstFive = [];
+      if (microBatch1.results) {
+        firstFive = microBatch1.results;
+      } else if (microBatch1.data) {
+        firstFive = microBatch1.data;
+      } else if (Array.isArray(microBatch1)) {
+        firstFive = microBatch1;
       }
 
-      setAllTenders(tendersData);
+      setAllTenders(firstFive);
       setLoading(false);
-      setLoadingProgress({ current: 10, total: 100, percentage: 10 });
+      setLoadingProgress({ current: 5, total: 100, percentage: 5 });
       setCurrentPage(1);
 
-      console.log(`✅ Phase 2.1: Loaded ${tendersData.length} tenders (showing immediately)`);
+      console.log(`✅ Phase 2.1a: Loaded ${firstFive.length} tenders (FCP optimized - showing ASAP!)`);
+
+      // Phase 2.1b: Load next 5 tenders (complete first 10)
+      console.log('📦 Phase 2.1b: Loading next 5 tenders...');
+      const microBatch2 = await fetchTenders({
+        page: 1,
+        limit: 5,
+        offset: 5,
+        dateFrom: from,
+        dateTo: to,
+        signal: abortController.signal
+      });
+
+      if (abortController.signal.aborted) return;
+
+      let nextFive = [];
+      if (microBatch2.results) {
+        nextFive = microBatch2.results;
+      } else if (microBatch2.data) {
+        nextFive = microBatch2.data;
+      } else if (Array.isArray(microBatch2)) {
+        nextFive = microBatch2;
+      }
+
+      setAllTenders(prev => [...prev, ...nextFive]);
+      setLoadingProgress({ current: 10, total: 100, percentage: 10 });
+
+      console.log(`✅ Phase 2.1b: Loaded ${nextFive.length} more tenders (total: 10 tenders shown)`);
 
       // Phase 2.2: Load remaining tenders in batches of 10
       setIsLoadingMore(true);
