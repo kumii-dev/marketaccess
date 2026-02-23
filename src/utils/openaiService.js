@@ -7,80 +7,59 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OP
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 /**
- * Extract 5 relevant keywords from user's bio/description using OpenAI
- * @param {string} bioText - User's bio/description text
+ * Extract 5 relevant keywords from user's comprehensive profile data using OpenAI
+ * @param {string} bioText - Combined rich text from all profile sources
  * @param {Object} profile - Full user profile for context
+ * @param {Object} combinedData - Structured combined data object (optional)
  * @returns {Promise<Array<string>>} - Array of 5 relevant keywords
  */
-export async function extractKeywordsFromBio(bioText, profile) {
+export async function extractKeywordsFromBio(bioText, profile, combinedData = null) {
   if (!OPENAI_API_KEY) {
     console.warn('OpenAI API key not configured, skipping keyword extraction');
     return [];
   }
 
-  // Loosened dependency: Allow empty bio if profile context exists
-  const hasProfileContext = profile && (
-    profile.startup?.industry || 
-    profile.profile?.industry_sectors ||
-    (profile.profile?.skills && profile.profile.skills.length > 0) ||
-    (profile.profile?.interests && profile.profile.interests.length > 0)
-  );
-
-  if ((!bioText || bioText.trim().length === 0) && !hasProfileContext) {
-    console.warn('No bio text or profile context available for keyword extraction');
+  // Check if we have any usable data
+  if ((!bioText || bioText.trim().length === 0) && !combinedData) {
+    console.warn('No bio text or combined data available for keyword extraction');
     return [];
   }
 
   try {
-    const userContext = {
-      industry: profile.startup?.industry || profile.profile?.industry_sectors || 'Not specified',
-      skills: profile.profile?.skills || [],
-      interests: profile.profile?.interests || [],
-      location: profile.startup?.location || profile.profile?.location || 'Not specified'
+    // Use combinedData if provided (richer), otherwise extract from profile
+    const dataSource = combinedData || {
+      bio: bioText,
+      industry: profile?.startup?.industry || profile?.profile?.industry_sectors || 'Not specified',
+      skills: profile?.profile?.skills || [],
+      interests: profile?.profile?.interests || [],
+      location: profile?.startup?.location || profile?.profile?.location || 'Not specified'
     };
 
-    // Adjust prompt based on what data is available
-    const hasBio = bioText && bioText.trim().length > 0;
-    
-    const prompt = hasBio 
-      ? `Analyze this business bio/description and extract EXACTLY 5 keywords that are most relevant for matching government tenders.
+    // Build comprehensive prompt with ALL available data
+    const prompt = `Analyze this comprehensive business profile and extract EXACTLY 5 keywords that are most relevant for matching government tenders.
 
-BIO/DESCRIPTION:
-${bioText}
+COMPREHENSIVE PROFILE DATA:
 
-ADDITIONAL CONTEXT:
-- Industry: ${userContext.industry}
-- Skills: ${userContext.skills.join(', ')}
-- Interests: ${userContext.interests.join(', ')}
-- Location: ${userContext.location}
+${dataSource.bio ? `Bio/Description:\n${dataSource.bio}\n\n` : ''}${dataSource.startupDescription ? `Startup Description:\n${dataSource.startupDescription}\n\n` : ''}Industry/Sector: ${dataSource.industry || 'Not specified'}
+
+${dataSource.skills && dataSource.skills.length > 0 ? `Skills & Capabilities:\n${dataSource.skills.join(', ')}\n\n` : ''}${dataSource.interests && dataSource.interests.length > 0 ? `Areas of Interest:\n${dataSource.interests.join(', ')}\n\n` : ''}${dataSource.keyProducts ? `Key Products/Services:\n${dataSource.keyProducts}\n\n` : ''}${dataSource.targetMarket ? `Target Market:\n${dataSource.targetMarket}\n\n` : ''}Location: ${dataSource.location || 'Not specified'}
+${dataSource.stage ? `Business Stage: ${dataSource.stage}\n` : ''}${dataSource.companyName ? `Company: ${dataSource.companyName}` : ''}
+
+INSTRUCTIONS:
+Analyze ALL the data above holistically and extract EXACTLY 5 keywords that best represent this business for government tender matching.
 
 Requirements:
-1. Return EXACTLY 5 keywords (no more)
-2. Focus on: services offered, industries served, capabilities, expertise areas
-3. Use specific, actionable terms (e.g., "construction", "software development", "consulting")
-4. Prioritize terms that would appear in tender descriptions
-5. Avoid generic terms like "quality", "professional", "excellence"
-6. Exclude common prepositions, conjunctions, and coordinating link words in English grammar - only return meaningful keywords that would help identify relevant tenders.
+1. Return EXACTLY 5 keywords (no more, no less)
+2. Synthesize insights from ALL available fields (bio, description, industry, skills, interests, products, market)
+3. Focus on: core services offered, industries served, capabilities, expertise areas
+4. Use specific, actionable terms that would appear in tender descriptions
+   Examples: "construction", "software development", "healthcare services", "civil engineering", "consulting"
+5. Prioritize terms that match government procurement categories
+6. Avoid generic terms like "quality", "professional", "excellence", "innovation"
+7. Exclude prepositions, conjunctions, and filler words
+8. Choose keywords with broad tender matching potential
 
-Respond with ONLY a JSON array of strings, nothing else.
-Example: ["construction", "infrastructure", "project management", "civil engineering", "municipal services"]`
-      : `Extract EXACTLY 5 keywords from this profile context that are most relevant for matching government tenders.
-
-PROFILE CONTEXT:
-- Industry: ${userContext.industry}
-- Skills: ${userContext.skills.join(', ')}
-- Interests: ${userContext.interests.join(', ')}
-- Location: ${userContext.location}
-
-Requirements:
-1. Return EXACTLY 5 keywords (no more)
-2. Focus on: industries, capabilities, expertise areas that match government tender categories
-3. Use specific, actionable terms (e.g., "construction", "software development", "consulting")
-4. Prioritize terms that would appear in tender descriptions
-5. Avoid generic terms like "quality", "professional", "excellence"
-6. Extract from industry, skills, and interests fields
-
-Respond with ONLY a JSON array of strings, nothing else.
+Respond with ONLY a JSON array of 5 strings, nothing else.
 Example: ["construction", "infrastructure", "project management", "civil engineering", "municipal services"]`;
 
     const response = await fetch(OPENAI_API_URL, {

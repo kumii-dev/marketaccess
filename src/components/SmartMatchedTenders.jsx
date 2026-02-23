@@ -429,38 +429,74 @@ const SmartMatchedTenders = () => {
       setAiLoading(true);
       console.log('🤖 Starting AI enhancement with keyword-based analysis...');
 
-      // Step 1: Extract keywords from bio/description or profile data
-      // Try to get bio or description from profile
-      let bio = profile?.profile?.bio || profile?.bio || '';
+      // Step 1: Collect ALL available data from 4 levels for richer insights
+      console.log('📊 Collecting comprehensive profile data from all sources...');
       
-      // If bio is empty, fallback to startup description
-      if (!bio || bio.trim().length === 0) {
-        bio = profile?.startup?.description || profile?.description || '';
+      // Level 1: User bio/description
+      const userBio = profile?.profile?.bio || profile?.bio || '';
+      
+      // Level 2: Startup description
+      const startupDesc = profile?.startup?.description || profile?.description || '';
+      
+      // Level 3: Structured profile fields
+      const industry = profile?.startup?.industry || profile?.profile?.industry_sectors || '';
+      const skills = profile?.profile?.skills || [];
+      const interests = profile?.profile?.interests || [];
+      const location = profile?.startup?.location || profile?.profile?.location || '';
+      const companyName = profile?.startup?.name || profile?.company?.name || '';
+      const stage = profile?.startup?.stage || '';
+      
+      // Level 4: Additional context
+      const keyProducts = profile?.startup?.key_products_services || '';
+      const targetMarket = profile?.startup?.target_market || '';
+      
+      // Combine ALL available data for maximum AI insight
+      const combinedData = {
+        bio: userBio.trim(),
+        startupDescription: startupDesc.trim(),
+        industry: industry,
+        skills: Array.isArray(skills) ? skills : [],
+        interests: Array.isArray(interests) ? interests : [],
+        location: location,
+        companyName: companyName,
+        stage: stage,
+        keyProducts: keyProducts,
+        targetMarket: targetMarket
+      };
+      
+      // Build rich text combining all sources
+      const richText = [
+        combinedData.bio,
+        combinedData.startupDescription,
+        combinedData.industry,
+        combinedData.skills.join(' '),
+        combinedData.interests.join(' '),
+        combinedData.keyProducts,
+        combinedData.targetMarket,
+        `Located in ${combinedData.location}`,
+        combinedData.stage ? `Business stage: ${combinedData.stage}` : ''
+      ].filter(text => text && text.trim().length > 0).join('. ');
+      
+      if (!richText || richText.trim().length === 0) {
+        console.warn('⚠️ No profile data available from any source, skipping AI analysis');
+        setAiLoading(false);
+        return;
       }
 
-      // If still no bio, construct from profile data (LOOSENED DEPENDENCY)
-      if (!bio || bio.trim().length === 0) {
-        console.log('⚠️ No bio/description found, constructing from profile data...');
-        const industry = profile?.startup?.industry || profile?.profile?.industry_sectors || '';
-        const skills = profile?.profile?.skills || [];
-        const interests = profile?.profile?.interests || [];
-        const location = profile?.startup?.location || profile?.profile?.location || '';
-        
-        // Build a synthetic bio from available data
-        bio = `${industry} ${Array.isArray(skills) ? skills.join(' ') : skills} ${Array.isArray(interests) ? interests.join(' ') : interests} ${location}`.trim();
-        
-        if (bio.length > 0) {
-          console.log('✅ Constructed bio from profile data:', bio.substring(0, 100) + '...');
-        } else {
-          console.warn('⚠️ No profile data available for AI analysis, skipping');
-          setAiLoading(false);
-          return;
-        }
-      }
-
-      console.log('📝 Extracting keywords from bio/description...');
-      console.log('Using text source:', bio.substring(0, 100) + '...');
-      const keywords = await extractKeywordsFromBio(bio, profile);
+      console.log('✅ Rich profile data collected:', {
+        hasBio: !!combinedData.bio,
+        hasStartupDesc: !!combinedData.startupDescription,
+        hasIndustry: !!combinedData.industry,
+        skillsCount: combinedData.skills.length,
+        interestsCount: combinedData.interests.length,
+        hasLocation: !!combinedData.location,
+        totalTextLength: richText.length
+      });
+      
+      console.log('📝 Extracting keywords from comprehensive profile data...');
+      console.log('Using combined data:', richText.substring(0, 150) + '...');
+      
+      const keywords = await extractKeywordsFromBio(richText, profile, combinedData);
       
       if (!keywords || keywords.length === 0) {
         console.warn('⚠️ No keywords extracted, skipping AI enhancement');
