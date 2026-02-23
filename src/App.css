@@ -196,7 +196,7 @@
 
 /* Progressive Loading Indicator */
 .loading-more-notice {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #b7c3b5ff 0%, #8bac8dff 100%);
   border-radius: 12px;
   padding: 1.25rem;
   margin: 1.5rem 0;

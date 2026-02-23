@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchTenders } from '../lib/api';
-import { batchAnalyzeMatches, generatePortfolioSummary } from '../utils/openaiService';
+import { 
+  extractKeywordsFromBio, 
+  analyzeTopTendersInBatch, 
+  generatePortfolioSummary 
+} from '../utils/openaiService';
 import { getCachedTenders, cacheTenders, getCacheInfo } from '../utils/tenderCache';
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
@@ -22,6 +26,7 @@ const SmartMatchedTenders = () => {
   const [aiAnalysis, setAiAnalysis] = useState(new Map());
   const [aiSummary, setAiSummary] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [extractedKeywords, setExtractedKeywords] = useState([]);
   
   // Ref to track latest matched tenders for AI enhancement
   const latestMatchedRef = useRef([]);
@@ -236,26 +241,84 @@ const SmartMatchedTenders = () => {
     fetchProfileAndTenders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]); // matchTendersToProfile is stable and doesn't need to be in deps
+  
   const enhanceWithAI = async (tenders, profile) => {
     try {
       setAiLoading(true);
-      console.log('Starting AI enhancement for top tenders...');
+      console.log('🤖 Starting AI enhancement with keyword-based analysis...');
 
-      // Analyze top 10 matches with AI
-      const topTenders = tenders.slice(0, 10);
-      const analysis = await batchAnalyzeMatches(topTenders, profile, 10);
-      setAiAnalysis(analysis);
+      // Step 1: Extract keywords from bio/description
+      const bio = extractProfileField(profile, [
+        'profile.bio',
+        'bio',
+        'startup.description',
+        'description'
+      ]) || '';
 
-      // Generate portfolio summary
+      if (!bio || bio.trim().length === 0) {
+        console.warn('⚠️ No bio/description found, skipping AI enhancement');
+        setAiLoading(false);
+        return;
+      }
+
+      console.log('📝 Extracting keywords from bio...');
+      const keywords = await extractKeywordsFromBio(bio, profile);
+      
+      if (!keywords || keywords.length === 0) {
+        console.warn('⚠️ No keywords extracted, skipping AI enhancement');
+        setAiLoading(false);
+        return;
+      }
+
+      setExtractedKeywords(keywords);
+      console.log('✅ Keywords extracted:', keywords);
+
+      // Step 2: Analyze top tenders using keywords (process in batches)
+      const analysisResults = new Map();
+      
+      // Split tenders into batches of 10
+      const batchSize = 10;
+      const batches = [];
+      for (let i = 0; i < tenders.length; i += batchSize) {
+        batches.push(tenders.slice(i, i + batchSize));
+      }
+
+      console.log(`📊 Processing ${batches.length} batches (${tenders.length} total tenders)`);
+
+      // Process each batch (analyzing top 2 per batch)
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        console.log(`\n📦 Batch ${i + 1}/${batches.length} (${batch.length} tenders)`);
+        
+        const batchAnalysis = await analyzeTopTendersInBatch(batch, keywords, profile);
+        
+        // Merge results
+        batchAnalysis.forEach((value, key) => {
+          analysisResults.set(key, value);
+        });
+
+        // Delay between batches to respect rate limits
+        if (i < batches.length - 1) {
+          console.log('⏳ Waiting before next batch...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      setAiAnalysis(analysisResults);
+      console.log(`✅ AI analysis complete: ${analysisResults.size} tenders analyzed`);
+
+      // Step 3: Generate portfolio summary
+      console.log('📊 Generating portfolio summary...');
       const summary = await generatePortfolioSummary(tenders, profile);
       setAiSummary(summary);
 
-      console.log('AI enhancement complete:', {
-        analyzedCount: analysis.size,
+      console.log('🎉 AI enhancement complete:', {
+        keywordsExtracted: keywords.length,
+        tendersAnalyzed: analysisResults.size,
         hasSummary: !!summary
       });
     } catch (err) {
-      console.error('AI enhancement error:', err);
+      console.error('❌ AI enhancement error:', err);
       // Don't throw - AI is optional enhancement
     } finally {
       setAiLoading(false);
@@ -717,6 +780,27 @@ const SmartMatchedTenders = () => {
                     : 'Complete your profile to see your strengths and get better matches.'}
                 </p>
                 
+                {/* AI-Extracted Keywords Display */}
+                {extractedKeywords.length > 0 && (
+                  <div className="extracted-keywords-section">
+                    <div className="keywords-header">
+                      <i className="bi bi-stars"></i>
+                      <span>AI-Extracted Keywords from Your Profile:</span>
+                    </div>
+                    <div className="keywords-list">
+                      {extractedKeywords.map((keyword, index) => (
+                        <span key={index} className="keyword-badge">
+                          <i className="bi bi-tag-fill"></i>
+                          {keyword}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="keywords-description">
+                      These keywords are used to match you with relevant tenders
+                    </p>
+                  </div>
+                )}
+                
                 {getBusinessStrengths(profileData).length > 0 ? (
                   <div className="business-strengths">
                     {getBusinessStrengths(profileData).map((strength, index) => (
@@ -995,6 +1079,24 @@ const SmartMatchedTenders = () => {
                                 {aiInfo.confidence} confidence
                               </span>
                             </div>
+                            
+                            {/* Show matched keywords if available */}
+                            {aiInfo.keywordMatches && aiInfo.keywordMatches.length > 0 && (
+                              <div className="keyword-matches">
+                                <span className="keyword-matches-label">
+                                  <i className="bi bi-check2-circle"></i>
+                                  Matched Keywords:
+                                </span>
+                                <div className="matched-keywords-list">
+                                  {aiInfo.keywordMatches.map((keyword, idx) => (
+                                    <span key={idx} className="matched-keyword">
+                                      {keyword}
+                                    </span>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
                             <ul className="match-reasons-list">
                               {aiInfo.reasons.map((reason, idx) => (
                                 <li key={idx}>

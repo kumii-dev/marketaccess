@@ -7,6 +7,214 @@ const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OP
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
 
 /**
+ * Extract 5 relevant keywords from user's bio/description using OpenAI
+ * @param {string} bioText - User's bio/description text
+ * @param {Object} profile - Full user profile for context
+ * @returns {Promise<Array<string>>} - Array of 5 relevant keywords
+ */
+export async function extractKeywordsFromBio(bioText, profile) {
+  if (!OPENAI_API_KEY) {
+    console.warn('OpenAI API key not configured, skipping keyword extraction');
+    return [];
+  }
+
+  if (!bioText || bioText.trim().length === 0) {
+    console.warn('No bio text provided for keyword extraction');
+    return [];
+  }
+
+  try {
+    const userContext = {
+      industry: profile.startup?.industry || profile.profile?.industry_sectors || 'Not specified',
+      skills: profile.profile?.skills || [],
+      interests: profile.profile?.interests || [],
+      location: profile.startup?.location || profile.profile?.location || 'Not specified'
+    };
+
+    const prompt = `Analyze this business bio/description and extract EXACTLY 5 keywords that are most relevant for matching government tenders.
+
+BIO/DESCRIPTION:
+${bioText}
+
+ADDITIONAL CONTEXT:
+- Industry: ${userContext.industry}
+- Skills: ${userContext.skills.join(', ')}
+- Interests: ${userContext.interests.join(', ')}
+- Location: ${userContext.location}
+
+Requirements:
+1. Return EXACTLY 5 keywords (no more, no less)
+2. Focus on: services offered, industries served, capabilities, expertise areas
+3. Use specific, actionable terms (e.g., "construction", "software development", "consulting")
+4. Prioritize terms that would appear in tender descriptions
+5. Avoid generic terms like "quality", "professional", "excellence"
+
+Respond with ONLY a JSON array of 5 strings, nothing else.
+Example: ["construction", "infrastructure", "project management", "civil engineering", "municipal services"]`;
+
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a keyword extraction expert. Respond only with valid JSON arrays.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 100
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('OpenAI API error (keyword extraction):', error);
+      return [];
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content;
+    
+    if (!content) {
+      console.error('No content in OpenAI response');
+      return [];
+    }
+
+    // Parse JSON response
+    const keywords = JSON.parse(content);
+    
+    if (!Array.isArray(keywords) || keywords.length !== 5) {
+      console.error('Invalid keyword response format:', keywords);
+      return [];
+    }
+
+    console.log('✅ Extracted keywords from bio:', keywords);
+    return keywords;
+    
+  } catch (error) {
+    console.error('Error extracting keywords from bio:', error);
+    return [];
+  }
+}
+
+/**
+ * Analyze tender description against extracted keywords
+ * @param {Object} tender - The tender object
+ * @param {Array<string>} keywords - Array of 5 keywords from user bio
+ * @param {Object} profile - User profile data
+ * @returns {Promise<Object>} - Match analysis with keyword relevance
+ */
+export async function analyzeTenderWithKeywords(tender, keywords, profile) {
+  if (!OPENAI_API_KEY) {
+    console.warn('OpenAI API key not configured, skipping tender analysis');
+    return null;
+  }
+
+  if (!keywords || keywords.length === 0) {
+    console.warn('No keywords provided for tender analysis');
+    return null;
+  }
+
+  try {
+    const tenderInfo = {
+      title: tender.tender?.title || 'No title',
+      description: tender.tender?.description || 'No description',
+      category: tender.tender?.mainProcurementCategory || tender.tender?.category || 'Not specified',
+      province: tender.tender?.province || 'Not specified'
+    };
+
+    const prompt = `You are a tender matching expert. Analyze how well this tender matches the user's business keywords.
+
+USER'S BUSINESS KEYWORDS (from bio analysis):
+${keywords.map((k, i) => `${i + 1}. ${k}`).join('\n')}
+
+TENDER:
+- Title: ${tenderInfo.title}
+- Description: ${tenderInfo.description.substring(0, 600)}
+- Category: ${tenderInfo.category}
+- Location: ${tenderInfo.province}
+
+USER LOCATION: ${profile.startup?.location || profile.profile?.location || 'Not specified'}
+
+Analyze and provide JSON response:
+{
+  "matchScore": 0-100 (semantic match between keywords and tender),
+  "confidenceLevel": "high" | "medium" | "low",
+  "keywordMatches": ["keyword1", "keyword2", ...] (which keywords are relevant),
+  "topReasons": [3-5 specific reasons why this matches],
+  "concerns": [0-2 potential challenges],
+  "recommendation": "brief actionable recommendation (1 sentence)"
+}
+
+Focus on semantic understanding - the tender doesn't need exact keyword matches, but should be relevant to the business domain.
+
+Respond ONLY with valid JSON.`;
+
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENAI_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a tender matching expert. Respond only with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 400
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error('OpenAI API error (tender analysis):', error);
+      return null;
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content;
+    
+    if (!content) {
+      console.error('No content in OpenAI response');
+      return null;
+    }
+
+    // Parse JSON response
+    const analysis = JSON.parse(content);
+    
+    return {
+      aiScore: analysis.matchScore || 0,
+      confidence: analysis.confidenceLevel || 'low',
+      keywordMatches: analysis.keywordMatches || [],
+      reasons: analysis.topReasons || [],
+      concerns: analysis.concerns || [],
+      recommendation: analysis.recommendation || ''
+    };
+    
+  } catch (error) {
+    console.error('Error in AI tender analysis:', error);
+    return null;
+  }
+}
+
+/**
  * Generate AI-powered match analysis for a tender
  * @param {Object} tender - The tender object
  * @param {Object} profile - User profile data
@@ -159,6 +367,55 @@ export async function batchAnalyzeMatches(tenders, profile, maxTenders = 10) {
   }
 
   console.log(`AI analysis complete: ${results.size} tenders analyzed`);
+  return results;
+}
+
+/**
+ * Optimized batch analysis - processes only top 2 tenders per batch
+ * @param {Array} tenders - Array of tender objects (batch of 10)
+ * @param {Array<string>} keywords - User's 5 business keywords
+ * @param {Object} profile - User profile data
+ * @returns {Promise<Map>} - Map of tender IDs to analysis results
+ */
+export async function analyzeTopTendersInBatch(tenders, keywords, profile) {
+  if (!OPENAI_API_KEY || !tenders || tenders.length === 0) {
+    console.warn('Cannot analyze tenders: missing API key or tenders');
+    return new Map();
+  }
+
+  if (!keywords || keywords.length === 0) {
+    console.warn('No keywords available for analysis');
+    return new Map();
+  }
+
+  // Sort by match score (descending) and take top 2
+  const sortedTenders = [...tenders].sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+  const topTwoTenders = sortedTenders.slice(0, 2);
+
+  const results = new Map();
+
+  console.log(`🎯 Analyzing top 2 tenders from batch of ${tenders.length}`);
+
+  for (let i = 0; i < topTwoTenders.length; i++) {
+    const tender = topTwoTenders[i];
+    const tenderId = tender.ocid || tender.id || `tender-${i}`;
+    
+    console.log(`  Analyzing #${i + 1}: ${tender.tender?.title?.substring(0, 50)}... (score: ${tender.matchScore || 0})`);
+    
+    const analysis = await analyzeTenderWithKeywords(tender, keywords, profile);
+    
+    if (analysis) {
+      results.set(tenderId, analysis);
+      console.log(`    ✅ AI Score: ${analysis.aiScore}, Confidence: ${analysis.confidence}`);
+    }
+    
+    // Small delay between requests
+    if (i < topTwoTenders.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  }
+
+  console.log(`✅ Batch analysis complete: ${results.size} tenders analyzed`);
   return results;
 }
 
