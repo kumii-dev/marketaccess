@@ -779,7 +779,7 @@ const SmartMatchedTenders = () => {
     return 'there';
   };
 
-  // Apply filters to matched tenders
+  // Apply filters to matched tenders (with keyword expansion feature)
   useEffect(() => {
     if (!matchedTenders || matchedTenders.length === 0) {
       setFilteredTenders([]);
@@ -788,15 +788,33 @@ const SmartMatchedTenders = () => {
 
     let result = [...matchedTenders];
 
-    // Filter by keywords
+    // EXPANDED KEYWORD SEARCH: Search ALL tenders, not just matched ones
     if (filters.keywords) {
       const keywords = filters.keywords.toLowerCase().split(/\s+/).filter(k => k.length > 0);
-      result = result.filter(tender => {
+      
+      // Search in ALL loaded tenders (expands beyond smart matches)
+      const expandedResults = allTenders.filter(tender => {
         const title = (tender.tender?.title || '').toLowerCase();
         const description = (tender.tender?.description || '').toLowerCase();
         const combinedText = `${title} ${description}`;
         return keywords.some(keyword => combinedText.includes(keyword));
       });
+      
+      // Merge with matched tenders and remove duplicates
+      const combinedResults = [...result, ...expandedResults];
+      const uniqueResults = [];
+      const seenIds = new Set();
+      
+      combinedResults.forEach(tender => {
+        const tenderId = tender.ocid || tender.id;
+        if (tenderId && !seenIds.has(tenderId)) {
+          seenIds.add(tenderId);
+          uniqueResults.push(tender);
+        }
+      });
+      
+      result = uniqueResults;
+      console.log(`🔍 Keyword expansion: ${matchedTenders.length} smart matches → ${result.length} total results (added ${result.length - matchedTenders.length} from keyword search)`);
     }
 
     // Filter by province
@@ -812,7 +830,7 @@ const SmartMatchedTenders = () => {
       });
     }
 
-    // Filter by minimum score
+    // Filter by minimum score (only for matched tenders that have scores)
     if (filters.minScore > 0) {
       result = result.filter(tender => (tender.matchScore || 0) >= filters.minScore);
     }
@@ -846,7 +864,7 @@ const SmartMatchedTenders = () => {
     });
 
     setFilteredTenders(result);
-  }, [matchedTenders, filters]);
+  }, [matchedTenders, filters, allTenders]);
 
   // Smart matching algorithm
   const matchTendersToProfile = (tenders, profile) => {
