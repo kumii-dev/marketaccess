@@ -157,61 +157,83 @@ function App() {
   const totalPages = Math.ceil(filteredAndSortedTenders.length / itemsPerPage) || 1;
 
   // Background refresh function (stale-while-revalidate)
+  // This runs in the background without blocking the UI
   const fetchFreshDataInBackground = async (from, to) => {
-    try {
-      console.log('🔄 Background refresh: Fetching fresh data...');
-      
-      // Fetch fresh data
-      const batches = [
-        { page: 1, limit: 10 },
-        { page: 2, limit: 10 },
-        { page: 3, limit: 10 },
-        { page: 4, limit: 10 },
-        { page: 5, limit: 10 },
-        { page: 6, limit: 10 },
-        { page: 7, limit: 10 },
-        { page: 8, limit: 10 },
-        { page: 9, limit: 10 },
-        { page: 10, limit: 10 },
-      ];
+    // Run in background - wrap in setTimeout to prevent blocking
+    setTimeout(async () => {
+      try {
+        console.log('🔄 Background refresh: Fetching fresh data (non-blocking)...');
+        
+        // Fetch only first 3 batches (30 tenders) for faster refresh
+        // Full refresh happens on next cold load
+        const batches = [
+          { page: 1, limit: 10 },
+          { page: 2, limit: 10 },
+          { page: 3, limit: 10 },
+        ];
 
-      let allFreshTenders = [];
-      for (const batch of batches) {
-        const batchData = await fetchTenders({
-          ...batch,
-          dateFrom: from,
-          dateTo: to
-        });
+        let allFreshTenders = [];
+        
+        // Add timeout protection for each batch (10 seconds max per batch)
+        for (const batch of batches) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per batch
+            
+            const batchData = await fetchTenders({
+              ...batch,
+              dateFrom: from,
+              dateTo: to,
+              signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
 
-        let batchTenders = [];
-        if (batchData.results) {
-          batchTenders = batchData.results;
-        } else if (batchData.data) {
-          batchTenders = batchData.data;
-        } else if (Array.isArray(batchData)) {
-          batchTenders = batchData;
+            let batchTenders = [];
+            if (batchData.results) {
+              batchTenders = batchData.results;
+            } else if (batchData.data) {
+              batchTenders = batchData.data;
+            } else if (Array.isArray(batchData)) {
+              batchTenders = batchData;
+            }
+
+            allFreshTenders = [...allFreshTenders, ...batchTenders];
+            
+            // Shorter delay for background refresh
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+          } catch (batchErr) {
+            if (batchErr.name === 'AbortError') {
+              console.warn(`⚠️ Background batch ${batch.page} timeout - skipping remaining`);
+              break; // Stop trying if one batch times out
+            }
+            console.warn(`⚠️ Background batch ${batch.page} failed:`, batchErr.message);
+          }
         }
 
-        allFreshTenders = [...allFreshTenders, ...batchTenders];
-        await new Promise(resolve => setTimeout(resolve, 300));
+        // Only update caches if we got some data
+        if (allFreshTenders.length > 0) {
+          // Update all cache layers (best effort)
+          await saveTendersToIDB(allFreshTenders, from, to).catch(err => {
+            console.warn('⚠️ Background IndexedDB save failed:', err.message);
+          });
+          
+          cacheTenders(allFreshTenders, from, to);
+          
+          saveTendersToSupabase(allFreshTenders, from, to).catch(err => {
+            console.warn('⚠️ Background Supabase save failed:', err.message);
+          });
+
+          console.log('✅ Background refresh complete:', allFreshTenders.length, 'tenders');
+        } else {
+          console.warn('⚠️ Background refresh got no data - skipping cache update');
+        }
+        
+      } catch (err) {
+        console.warn('⚠️ Background refresh failed:', err.message);
       }
-
-      // Update all cache layers
-      await saveTendersToIDB(allFreshTenders, from, to).catch(err => {
-        console.warn('⚠️ Background IndexedDB save failed:', err.message);
-      });
-      
-      cacheTenders(allFreshTenders, from, to);
-      
-      saveTendersToSupabase(allFreshTenders, from, to).catch(err => {
-        console.warn('⚠️ Background Supabase save failed:', err.message);
-      });
-
-      console.log('✅ Background refresh complete:', allFreshTenders.length, 'tenders');
-      
-    } catch (err) {
-      console.warn('⚠️ Background refresh failed:', err.message);
-    }
+    }, 0); // Run asynchronously without blocking
   };
 
   const loadTenders = async (from, to) => {
@@ -334,37 +356,57 @@ function App() {
         if (abortController.signal.aborted) break;
 
         const batch = batches[i];
-        const batchData = await fetchTenders({
-          ...batch,
-          dateFrom: from,
-          dateTo: to,
-          signal: abortController.signal
-        });
+        
+        try {
+          // Add 15-second timeout per batch to prevent hanging
+          const batchController = new AbortController();
+          const batchTimeoutId = setTimeout(() => {
+            console.warn(`⚠️ Batch ${i + 1} timeout after 15s - skipping`);
+            batchController.abort();
+          }, 15000);
+          
+          const batchData = await fetchTenders({
+            ...batch,
+            dateFrom: from,
+            dateTo: to,
+            signal: batchController.signal
+          });
+          
+          clearTimeout(batchTimeoutId);
 
-        if (abortController.signal.aborted) break;
+          if (abortController.signal.aborted) break;
 
-        let batchTenders = [];
-        if (batchData.results) {
-          batchTenders = batchData.results;
-        } else if (batchData.data) {
-          batchTenders = batchData.data;
-        } else if (Array.isArray(batchData)) {
-          batchTenders = batchData;
+          let batchTenders = [];
+          if (batchData.results) {
+            batchTenders = batchData.results;
+          } else if (batchData.data) {
+            batchTenders = batchData.data;
+          } else if (Array.isArray(batchData)) {
+            batchTenders = batchData;
+          }
+
+          setAllTenders(prev => [...prev, ...batchTenders]);
+
+          const currentCount = 10 + (i + 1) * 10;
+          setLoadingProgress({
+            current: currentCount,
+            total: 100,
+            percentage: (currentCount / 100) * 100
+          });
+
+          console.log(`📦 Batch ${i + 1}/${batches.length}: Loaded ${batchTenders.length} tenders (total: ${currentCount})`);
+
+          // Rate limiting
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+        } catch (batchErr) {
+          if (batchErr.name === 'AbortError') {
+            console.warn(`⚠️ Batch ${i + 1} aborted or timed out - continuing with next batch`);
+            continue; // Try next batch
+          }
+          console.warn(`⚠️ Batch ${i + 1} failed:`, batchErr.message);
+          // Continue with next batch instead of failing completely
         }
-
-        setAllTenders(prev => [...prev, ...batchTenders]);
-
-        const currentCount = 10 + (i + 1) * 10;
-        setLoadingProgress({
-          current: currentCount,
-          total: 100,
-          percentage: (currentCount / 100) * 100
-        });
-
-        console.log(`📦 Batch ${i + 1}/${batches.length}: Loaded ${batchTenders.length} tenders (total: ${currentCount})`);
-
-        // Rate limiting
-        await new Promise(resolve => setTimeout(resolve, 300));
       }
 
       // Phase 2.3: Save to all cache layers (best effort)
