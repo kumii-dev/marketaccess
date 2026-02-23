@@ -248,20 +248,22 @@ const SmartMatchedTenders = () => {
       console.log('🤖 Starting AI enhancement with keyword-based analysis...');
 
       // Step 1: Extract keywords from bio/description
-      const bio = extractProfileField(profile, [
-        'profile.bio',
-        'bio',
-        'startup.description',
-        'description'
-      ]) || '';
+      // Try to get bio or description from profile
+      let bio = profile?.profile?.bio || profile?.bio || '';
+      
+      // If bio is empty, fallback to startup description
+      if (!bio || bio.trim().length === 0) {
+        bio = profile?.startup?.description || profile?.description || '';
+      }
 
       if (!bio || bio.trim().length === 0) {
-        console.warn('⚠️ No bio/description found, skipping AI enhancement');
+        console.warn('⚠️ No bio/description found in profile, skipping AI enhancement');
         setAiLoading(false);
         return;
       }
 
-      console.log('📝 Extracting keywords from bio...');
+      console.log('📝 Extracting keywords from bio/description...');
+      console.log('Using text source:', bio.substring(0, 100) + '...');
       const keywords = await extractKeywordsFromBio(bio, profile);
       
       if (!keywords || keywords.length === 0) {
