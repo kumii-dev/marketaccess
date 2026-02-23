@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import PrivateTendersPage from './components/PrivateTendersPage';
 import SmartMatchedTenders from './components/SmartMatchedTenders';
 import TopNavbar from './components/TopNavbar';
+import { getCachedTenders, cacheTenders } from './utils/tenderCache';
 import './App.css';
 
 function App() {
@@ -17,6 +18,8 @@ function App() {
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [currentSection, setCurrentSection] = useState('government-tenders');
+  const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 100, percentage: 0 });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
     province: '',
@@ -156,34 +159,111 @@ function App() {
 
     setLoading(true);
     setError(null);
+    setLoadingProgress({ current: 0, total: 100, percentage: 0 });
 
     try {
-      const data = await fetchTenders({
+      // Check cache first
+      const cachedData = getCachedTenders(from, to);
+      if (cachedData && cachedData.length > 0) {
+        console.log('📦 Using cached government tenders:', cachedData.length);
+        setAllTenders(cachedData);
+        setLoading(false);
+        setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+        return;
+      }
+
+      console.log('🔄 Loading government tenders progressively...');
+
+      // Phase 1: Load initial 10 tenders immediately
+      const initialData = await fetchTenders({
         page: 1,
-        limit: itemsPerPage,
+        limit: 10,
         dateFrom: from,
         dateTo: to,
         signal: abortController.signal
       });
 
-      // Check if request was aborted
-      if (abortController.signal.aborted) {
-        return;
-      }
+      if (abortController.signal.aborted) return;
 
-      // Handle different response structures
       let tendersData = [];
-
-      if (data.results) {
-        tendersData = data.results;
-      } else if (data.data) {
-        tendersData = data.data;
-      } else if (Array.isArray(data)) {
-        tendersData = data;
+      if (initialData.results) {
+        tendersData = initialData.results;
+      } else if (initialData.data) {
+        tendersData = initialData.data;
+      } else if (Array.isArray(initialData)) {
+        tendersData = initialData;
       }
 
       setAllTenders(tendersData);
-      setCurrentPage(1); // Reset to page 1 when data changes
+      setLoading(false);
+      setLoadingProgress({ current: 10, total: 100, percentage: 10 });
+      setCurrentPage(1);
+
+      console.log(`✅ Phase 1: Loaded ${tendersData.length} tenders (showing immediately)`);
+
+      // Phase 2: Load remaining tenders in batches of 10
+      setIsLoadingMore(true);
+
+      const batches = [
+        { page: 2, limit: 10 },  // 11-20
+        { page: 3, limit: 10 },  // 21-30
+        { page: 4, limit: 10 },  // 31-40
+        { page: 5, limit: 10 },  // 41-50
+        { page: 6, limit: 10 },  // 51-60
+        { page: 7, limit: 10 },  // 61-70
+        { page: 8, limit: 10 },  // 71-80
+        { page: 9, limit: 10 },  // 81-90
+        { page: 10, limit: 10 }, // 91-100
+      ];
+
+      for (let i = 0; i < batches.length; i++) {
+        if (abortController.signal.aborted) break;
+
+        const batch = batches[i];
+        const batchData = await fetchTenders({
+          ...batch,
+          dateFrom: from,
+          dateTo: to,
+          signal: abortController.signal
+        });
+
+        if (abortController.signal.aborted) break;
+
+        let batchTenders = [];
+        if (batchData.results) {
+          batchTenders = batchData.results;
+        } else if (batchData.data) {
+          batchTenders = batchData.data;
+        } else if (Array.isArray(batchData)) {
+          batchTenders = batchData;
+        }
+
+        setAllTenders(prev => [...prev, ...batchTenders]);
+
+        const currentCount = 10 + (i + 1) * 10;
+        setLoadingProgress({
+          current: currentCount,
+          total: 100,
+          percentage: (currentCount / 100) * 100
+        });
+
+        console.log(`📦 Batch ${i + 1}/${batches.length}: Loaded ${batchTenders.length} tenders (total: ${currentCount})`);
+
+        // Rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // Phase 3: Cache the results
+      setAllTenders(prev => {
+        cacheTenders(prev, from, to);
+        console.log('💾 Cached government tenders:', prev.length);
+        return prev;
+      });
+
+      setIsLoadingMore(false);
+      setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+      console.log('✅ All government tenders loaded successfully');
+
     } catch (err) {
       // Ignore abort errors
       if (err.name === 'AbortError' || err.message === 'canceled') {
@@ -194,9 +274,11 @@ function App() {
       console.error('Error loading tenders:', err);
       setError(err.message || 'Failed to load tenders. Please try again.');
       setAllTenders([]);
+      setIsLoadingMore(false);
     } finally {
       if (!abortController.signal.aborted) {
         setLoading(false);
+        setIsLoadingMore(false);
       }
     }
   };
@@ -304,6 +386,24 @@ function App() {
             dateTo={dateTo}
             onDateRangeChange={handleDateRangeChange}
           />
+
+          {/* Progressive Loading Indicator */}
+          {isLoadingMore && (
+            <div className="loading-more-notice">
+              <div className="loading-more-header">
+                <div className="loading-spinner-icon"></div>
+                <span className="loading-more-text">
+                  Loading more tenders... {loadingProgress.current} of {loadingProgress.total}
+                </span>
+              </div>
+              <div className="loading-progress-bar">
+                <div 
+                  className="loading-progress-fill" 
+                  style={{ width: `${loadingProgress.percentage}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
 
           {loading && <LoadingSpinner />}
 
