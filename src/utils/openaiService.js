@@ -43,13 +43,14 @@ ADDITIONAL CONTEXT:
 - Location: ${userContext.location}
 
 Requirements:
-1. Return EXACTLY 5 keywords (no more, no less)
+1. Return EXACTLY 5 keywords (no more)
 2. Focus on: services offered, industries served, capabilities, expertise areas
 3. Use specific, actionable terms (e.g., "construction", "software development", "consulting")
 4. Prioritize terms that would appear in tender descriptions
 5. Avoid generic terms like "quality", "professional", "excellence"
+6. Exclude common prepositions, conjunctions, and coordinating link words in English grammar - only return meaningful keywords that would help identify relevant tenders.
 
-Respond with ONLY a JSON array of 5 strings, nothing else.
+Respond with ONLY a JSON array of strings, nothing else.
 Example: ["construction", "infrastructure", "project management", "civil engineering", "municipal services"]`;
 
     const response = await fetch(OPENAI_API_URL, {
