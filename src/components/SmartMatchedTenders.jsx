@@ -296,7 +296,18 @@ const SmartMatchedTenders = () => {
               // Append new tenders and get the updated matched tenders
               let updatedMatched = [];
               setAllTenders(prev => {
-                const combined = [...prev, ...batchTenders];
+                // Deduplicate: filter out tenders that already exist (by ocid or id)
+                const existingIds = new Set(
+                  prev.map(t => t.ocid || t.id).filter(Boolean)
+                );
+                const newTenders = batchTenders.filter(t => {
+                  const tenderId = t.ocid || t.id;
+                  return tenderId && !existingIds.has(tenderId);
+                });
+                
+                const combined = [...prev, ...newTenders];
+                console.log(`📦 Batch ${i + 1}: ${batchTenders.length} fetched, ${newTenders.length} new (${existingIds.size} duplicates filtered)`);
+                
                 // Re-match with all tenders so far
                 const newMatched = matchTendersToProfile(combined, profile);
                 setMatchedTenders(newMatched);
@@ -791,6 +802,25 @@ const SmartMatchedTenders = () => {
   const matchTendersToProfile = (tenders, profile) => {
     if (!profile || !tenders || tenders.length === 0) return [];
 
+    // ✅ STEP 1: Deduplicate input tenders by ocid or id
+    const uniqueTenders = [];
+    const seenIds = new Set();
+    
+    for (const tender of tenders) {
+      const tenderId = tender.ocid || tender.id;
+      if (tenderId && !seenIds.has(tenderId)) {
+        seenIds.add(tenderId);
+        uniqueTenders.push(tender);
+      } else if (!tenderId) {
+        // Keep tenders without ID (rare, but handle gracefully)
+        uniqueTenders.push(tender);
+      }
+    }
+    
+    if (uniqueTenders.length < tenders.length) {
+      console.log(`🔍 Deduplication: ${tenders.length} tenders → ${uniqueTenders.length} unique (${tenders.length - uniqueTenders.length} duplicates removed)`);
+    }
+
     const scores = {};
     
     console.log('Matching tenders to profile:', profile);
@@ -851,8 +881,8 @@ const SmartMatchedTenders = () => {
     console.log('Profile province:', profileProvince);
     console.log('Profile categories:', profileCategories);
 
-    // Score each tender
-    const scoredTenders = tenders.map(tender => {
+    // Score each tender (using deduplicated list)
+    const scoredTenders = uniqueTenders.map(tender => {
       let score = 0;
       const reasons = [];
 
@@ -906,7 +936,7 @@ const SmartMatchedTenders = () => {
 
     setMatchingScore(scores);
     
-    console.log(`Matched ${matched.length} tenders out of ${tenders.length} total`);
+    console.log(`✅ Matched ${matched.length} unique tenders out of ${uniqueTenders.length} total`);
     return matched;
   };
 
@@ -1244,17 +1274,21 @@ const SmartMatchedTenders = () => {
           {!loading && !error && filteredTenders.length > 0 && (
             <>
               <div className="tender-grid">
-                {filteredTenders.map((tender, index) => (
-                  <div key={tender.ocid || tender.id || index} className="matched-tender-wrapper">
-                    <div className="match-score-badge">
-                      <i className="bi bi-star-fill"></i>
-                      <span>{tender.matchScore || 0}</span>
-                    </div>
-                    
-                    {/* AI-Enhanced Match Reasons */}
-                    {(() => {
-                      const tenderId = tender.ocid || tender.id || `tender-${index}`;
-                      const aiInfo = aiAnalysis.get(tenderId);
+                {filteredTenders.map((tender, index) => {
+                  // Generate stable unique key (prefer ocid/id, fallback to combo)
+                  const tenderKey = tender.ocid || tender.id || `tender-${tender.tender?.title}-${index}`;
+                  
+                  return (
+                    <div key={tenderKey} className="matched-tender-wrapper">
+                      <div className="match-score-badge">
+                        <i className="bi bi-star-fill"></i>
+                        <span>{tender.matchScore || 0}</span>
+                      </div>
+                      
+                      {/* AI-Enhanced Match Reasons */}
+                      {(() => {
+                        const tenderId = tender.ocid || tender.id || tenderKey;
+                        const aiInfo = aiAnalysis.get(tenderId);
                       
                       // Show AI analysis if available, otherwise show basic reasons
                       if (aiInfo && aiInfo.reasons && aiInfo.reasons.length > 0) {
@@ -1339,7 +1373,8 @@ const SmartMatchedTenders = () => {
                     
                     <TenderCard tender={tender} />
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </>
           )}
