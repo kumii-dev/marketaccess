@@ -194,7 +194,8 @@ const SmartMatchedTenders = () => {
             }
 
             if (batchTenders.length > 0) {
-              // Append new tenders
+              // Append new tenders and get the updated matched tenders
+              let updatedMatched = [];
               setAllTenders(prev => {
                 const combined = [...prev, ...batchTenders];
                 // Re-match with all tenders so far
@@ -203,6 +204,7 @@ const SmartMatchedTenders = () => {
                 
                 // Update ref with latest matches
                 latestMatchedRef.current = newMatched;
+                updatedMatched = newMatched;
                 
                 // Cache the combined result after last batch
                 if (i === batches.length - 1) {
@@ -217,6 +219,12 @@ const SmartMatchedTenders = () => {
               setLoadingProgress({ current: currentCount, total: 100, percentage });
               
               console.log(`📦 Batch ${i + 1}/9 loaded: +${batchTenders.length} tenders (Total: ${currentCount})`);
+              
+              // Run AI enhancement after each batch with updated matches
+              if (updatedMatched.length > 0) {
+                console.log(`🤖 Running AI enhancement for batch ${i + 1}/9 with ${updatedMatched.length} matched tenders`);
+                enhanceWithAI(updatedMatched, profile);
+              }
             }
 
             // Small delay between batches to avoid overwhelming the API
@@ -231,13 +239,7 @@ const SmartMatchedTenders = () => {
 
         setIsLoadingMore(false);
         console.log('✅ All tenders loaded successfully');
-        
-        // AI enhancement already ran after Phase 1, but we can update it with all tenders now
-        console.log('� Updating AI enhancement with all loaded tenders...');
-        if (latestMatchedRef.current && latestMatchedRef.current.length > 0) {
-          console.log(`✅ Re-running AI enhancement with ${latestMatchedRef.current.length} total matched tenders`);
-          enhanceWithAI(latestMatchedRef.current, profile);
-        }
+        console.log('🎯 AI enhancement ran after each batch - all done!');
 
       } catch (err) {
         console.error('Error fetching data:', err);
