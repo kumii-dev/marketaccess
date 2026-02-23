@@ -496,10 +496,10 @@ const SmartMatchedTenders = () => {
           analysisResults.set(key, value);
         });
 
-        // Delay between batches to respect rate limits
+        // Delay between batches to respect rate limits (reduced from 1000ms to 300ms for faster processing)
         if (i < batches.length - 1) {
           console.log('⏳ Waiting before next batch...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
 
@@ -861,7 +861,7 @@ const SmartMatchedTenders = () => {
       'before', 'behind', 'below', 'beneath', 'beside', 'between', 'beyond', 'by',
       'despite', 'down', 'during', 'except', 'for', 'from', 'in', 'inside', 'into',
       'like', 'near', 'of', 'off', 'on', 'onto', 'out', 'outside', 'over', 'past',
-      'since', 'through', 'throughout', 'till', 'to', 'toward', 'under', 'underneath',
+      'since', 'through', 'towards', 'campus', 'team', 'throughout', 'till', 'to', 'toward', 'under', 'underneath',
       'until', 'up', 'upon', 'with', 'within', 'without'
     ]);
     
