@@ -1155,18 +1155,8 @@ const SmartMatchedTenders = () => {
         reasons.push(`Category match: ${tenderCategory}`);
       }
 
-      // Closing date preference (favor tenders closing soon but not too soon)
-      const endDate = tender.tender?.tenderPeriod?.endDate;
-      if (endDate) {
-        const daysUntilClose = Math.floor((new Date(endDate) - new Date()) / (1000 * 60 * 60 * 24));
-        if (daysUntilClose > 7 && daysUntilClose < 30) {
-          score += 15;
-          reasons.push(`Good timeline: ${daysUntilClose} days to close`);
-        } else if (daysUntilClose > 0 && daysUntilClose <= 7) {
-          score += 5;
-          reasons.push(`Closes soon: ${daysUntilClose} days`);
-        }
-      }
+      // Timeline scoring removed to reduce false positives
+      // Focus on business relevance (keywords, province, category) only
 
       scores[tender.ocid] = { score, reasons };
       return { ...tender, matchScore: score, matchReasons: reasons };
