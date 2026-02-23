@@ -6,6 +6,12 @@ import {
   generatePortfolioSummary 
 } from '../utils/openaiService';
 import { getCachedTenders, cacheTenders, getCacheInfo } from '../utils/tenderCache';
+import { 
+  getTendersFromIDB, 
+  saveTendersToIDB, 
+  getAIAnalysisFromIDB, 
+  saveAIAnalysisToIDB 
+} from '../utils/tenderCacheDB';
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -101,16 +107,53 @@ const SmartMatchedTenders = () => {
         const dateFrom = thirtyDaysAgo.toISOString().split('T')[0];
         const dateTo = today.toISOString().split('T')[0];
 
-        // Check cache first
+        // 🚀 PHASE 0: Check IndexedDB first (fastest - 10-50ms)
+        console.log('⚡ Checking IndexedDB cache...');
+        const idbTenders = await getTendersFromIDB(dateFrom, dateTo);
+        
+        if (idbTenders && idbTenders.length > 0) {
+          console.log('✅ Using IndexedDB cache - instant load!');
+          setAllTenders(idbTenders);
+          const matched = matchTendersToProfile(idbTenders, profile);
+          setMatchedTenders(matched);
+          latestMatchedRef.current = matched;
+          setLoading(false);
+          
+          // Check for cached AI analysis
+          const userId = profile?.profile?.user_id || profile?.user_id;
+          if (userId) {
+            const cachedAI = await getAIAnalysisFromIDB(userId);
+            if (cachedAI && cachedAI.keywords) {
+              console.log('🤖 Using cached AI keywords from IndexedDB');
+              setExtractedKeywords(cachedAI.keywords);
+            }
+          }
+          
+          // Enhance with AI if no cached analysis
+          if (matched.length > 0) {
+            enhanceWithAI(matched, profile);
+          }
+          
+          // Fetch fresh data in background (stale-while-revalidate)
+          console.log('🔄 Fetching fresh data in background...');
+          fetchFreshDataInBackground(dateFrom, dateTo, profile);
+          return;
+        }
+
+        // Check session cache (5min TTL)
+        console.log('⚡ Checking session cache...');
         const cachedTenders = getCachedTenders(dateFrom, dateTo);
         const cacheInfo = getCacheInfo();
         
         if (cachedTenders && cachedTenders.length > 0) {
-          console.log('⚡ Using cached tenders:', cacheInfo);
+          console.log('⚡ Using session cache:', cacheInfo);
           setAllTenders(cachedTenders);
           const cachedMatched = matchTendersToProfile(cachedTenders, profile);
           setMatchedTenders(cachedMatched);
           setLoading(false);
+          
+          // Save to IndexedDB for next reload
+          await saveTendersToIDB(cachedTenders, dateFrom, dateTo);
           
           // Still enhance with AI in background
           if (cachedMatched.length > 0) {
@@ -209,6 +252,10 @@ const SmartMatchedTenders = () => {
                 // Cache the combined result after last batch
                 if (i === batches.length - 1) {
                   cacheTenders(combined, dateFrom, dateTo);
+                  // Also save to IndexedDB for persistent cache
+                  saveTendersToIDB(combined, dateFrom, dateTo).then(() => {
+                    console.log('💾 Saved all tenders to IndexedDB for next reload');
+                  });
                 }
                 
                 return combined;
@@ -258,6 +305,50 @@ const SmartMatchedTenders = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authToken]); // matchTendersToProfile is stable and doesn't need to be in deps
   
+  // Background fetch function for stale-while-revalidate pattern
+  const fetchFreshDataInBackground = async (dateFrom, dateTo, profile) => {
+    try {
+      console.log('🔄 Background refresh: Fetching latest tenders...');
+      
+      // Fetch first 100 tenders (10 pages)
+      const freshData = await fetchTenders({
+        page: 1,
+        limit: 100,
+        dateFrom,
+        dateTo
+      });
+
+      let freshTenders = [];
+      if (freshData.results) {
+        freshTenders = freshData.results;
+      } else if (freshData.data) {
+        freshTenders = freshData.data;
+      } else if (Array.isArray(freshData)) {
+        freshTenders = freshData;
+      }
+
+      if (freshTenders.length > 0) {
+        // Update caches
+        await saveTendersToIDB(freshTenders, dateFrom, dateTo);
+        cacheTenders(freshTenders, dateFrom, dateTo);
+        
+        // Check if data changed significantly
+        const currentCount = allTenders.length;
+        const newCount = freshTenders.length;
+        
+        if (Math.abs(newCount - currentCount) > 5) {
+          console.log(`✅ Background refresh complete: ${newCount} tenders (was ${currentCount})`);
+          // Could show a toast notification here: "New tenders available"
+        } else {
+          console.log(`✅ Background refresh complete: No significant changes`);
+        }
+      }
+    } catch (err) {
+      console.warn('⚠️ Background refresh failed (using cached data):', err.message);
+      // Fail silently - user already has cached data
+    }
+  };
+  
   const enhanceWithAI = async (tenders, profile) => {
     try {
       setAiLoading(true);
@@ -290,6 +381,14 @@ const SmartMatchedTenders = () => {
 
       setExtractedKeywords(keywords);
       console.log('✅ Keywords extracted:', keywords);
+      
+      // Save keywords to IndexedDB cache
+      const userId = profile?.profile?.user_id || profile?.user_id;
+      if (userId) {
+        saveAIAnalysisToIDB(userId, keywords, {}).then(() => {
+          console.log('💾 Saved AI keywords to IndexedDB');
+        });
+      }
 
       // Step 2: Analyze top tenders using keywords (process in batches)
       const analysisResults = new Map();
