@@ -447,7 +447,7 @@ const SmartMatchedTenders = () => {
       const stage = profile?.startup?.stage || '';
       
       // Level 4: Additional context
-      const keyProducts = profile?.startup?.key_products_services || '';
+      const keyProducts = profile?.startup?.key_products_services || [];
       const targetMarket = profile?.startup?.target_market || '';
       
       // Combine ALL available data for maximum AI insight
@@ -460,22 +460,22 @@ const SmartMatchedTenders = () => {
         location: location,
         companyName: companyName,
         stage: stage,
-        keyProducts: keyProducts,
+        keyProducts: Array.isArray(keyProducts) ? keyProducts : (keyProducts ? [keyProducts] : []),
         targetMarket: targetMarket
       };
       
-      // Build rich text combining all sources
+      // Build rich text combining all sources - handle all types properly
       const richText = [
         combinedData.bio,
         combinedData.startupDescription,
         combinedData.industry,
         combinedData.skills.join(' '),
         combinedData.interests.join(' '),
-        combinedData.keyProducts,
-        combinedData.targetMarket,
-        `Located in ${combinedData.location}`,
+        combinedData.keyProducts.join(' '), // Fixed: keyProducts is now always an array
+        typeof combinedData.targetMarket === 'string' ? combinedData.targetMarket : '',
+        combinedData.location ? `Located in ${combinedData.location}` : '',
         combinedData.stage ? `Business stage: ${combinedData.stage}` : ''
-      ].filter(text => text && text.trim().length > 0).join('. ');
+      ].filter(text => text && typeof text === 'string' && text.trim().length > 0).join('. ');
       
       if (!richText || richText.trim().length === 0) {
         console.warn('⚠️ No profile data available from any source, skipping AI analysis');

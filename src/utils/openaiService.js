@@ -42,7 +42,7 @@ COMPREHENSIVE PROFILE DATA:
 
 ${dataSource.bio ? `Bio/Description:\n${dataSource.bio}\n\n` : ''}${dataSource.startupDescription ? `Startup Description:\n${dataSource.startupDescription}\n\n` : ''}Industry/Sector: ${dataSource.industry || 'Not specified'}
 
-${dataSource.skills && dataSource.skills.length > 0 ? `Skills & Capabilities:\n${dataSource.skills.join(', ')}\n\n` : ''}${dataSource.interests && dataSource.interests.length > 0 ? `Areas of Interest:\n${dataSource.interests.join(', ')}\n\n` : ''}${dataSource.keyProducts ? `Key Products/Services:\n${dataSource.keyProducts}\n\n` : ''}${dataSource.targetMarket ? `Target Market:\n${dataSource.targetMarket}\n\n` : ''}Location: ${dataSource.location || 'Not specified'}
+${dataSource.skills && dataSource.skills.length > 0 ? `Skills & Capabilities:\n${dataSource.skills.join(', ')}\n\n` : ''}${dataSource.interests && dataSource.interests.length > 0 ? `Areas of Interest:\n${dataSource.interests.join(', ')}\n\n` : ''}${dataSource.keyProducts && dataSource.keyProducts.length > 0 ? `Key Products/Services:\n${Array.isArray(dataSource.keyProducts) ? dataSource.keyProducts.join(', ') : dataSource.keyProducts}\n\n` : ''}${dataSource.targetMarket ? `Target Market:\n${dataSource.targetMarket}\n\n` : ''}Location: ${dataSource.location || 'Not specified'}
 ${dataSource.stage ? `Business Stage: ${dataSource.stage}\n` : ''}${dataSource.companyName ? `Company: ${dataSource.companyName}` : ''}
 
 INSTRUCTIONS:
