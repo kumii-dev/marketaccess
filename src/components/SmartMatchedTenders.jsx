@@ -889,8 +889,59 @@ const SmartMatchedTenders = () => {
       'categories'
     ]) || [];
     
+    // Backward compatibility: Map old generic categories to new specific categories
+    const categoryFallbacks = {
+      'goods': [
+        'Manufacturing',
+        'Supplies: General',
+        'Supplies: Computer Equipment',
+        'Supplies: Electrical Equipment',
+        'Supplies: Medical',
+        'Supplies: Perishable Provisions',
+        'Supplies: Stationery/Printing',
+        'Supplies: Clothing/Textiles/Footwear',
+        'Other manufacturing'
+      ],
+      'services': [
+        'Professional, scientific and technical activities',
+        'Services: General',
+        'Services: Professional',
+        'Services: Building',
+        'Services: Civil',
+        'Services: Electrical',
+        'Services: Functional (Including Cleaning and Security Services)',
+        'Administrative and support activities',
+        'Information and communication',
+        'Other service activities'
+      ],
+      'works': [
+        'Construction',
+        'Construction of buildings',
+        'Civil engineering',
+        'Specialised construction activities',
+        'Services: Building',
+        'Services: Civil'
+      ],
+      'consultingServices': [
+        'Activities of head offices; management consultancy activities',
+        'Professional, scientific and technical activities',
+        'Services: Professional',
+        'Other professional, scientific and technical activities'
+      ]
+    };
+    
+    // Expand profile categories with fallbacks for old categories
+    const expandedProfileCategories = [...profileCategories];
+    profileCategories.forEach(cat => {
+      const catLower = (cat || '').toLowerCase();
+      if (categoryFallbacks[catLower]) {
+        expandedProfileCategories.push(...categoryFallbacks[catLower]);
+      }
+    });
+    
     console.log('Profile province:', profileProvince);
-    console.log('Profile categories:', profileCategories);
+    console.log('Profile categories (original):', profileCategories);
+    console.log('Profile categories (expanded):', expandedProfileCategories);
 
     // Score each tender (using deduplicated list)
     const scoredTenders = uniqueTenders.map(tender => {
@@ -916,9 +967,9 @@ const SmartMatchedTenders = () => {
         reasons.push(`Located in ${tenderProvince}`);
       }
 
-      // Category matching
+      // Category matching (with backward compatibility for old categories)
       const tenderCategory = tender.tender?.mainProcurementCategory || tender.tender?.category;
-      if (tenderCategory && Array.isArray(profileCategories) && profileCategories.includes(tenderCategory)) {
+      if (tenderCategory && Array.isArray(expandedProfileCategories) && expandedProfileCategories.includes(tenderCategory)) {
         score += 30;
         reasons.push(`Category match: ${tenderCategory}`);
       }
