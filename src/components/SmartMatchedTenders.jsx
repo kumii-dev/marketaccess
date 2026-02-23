@@ -855,13 +855,24 @@ const SmartMatchedTenders = () => {
     // Combine all text for keyword extraction
     const allProfileText = `${industry} ${services} ${interests} ${bio}`;
     
+    // List of common prepositions to exclude from matching
+    const prepositions = new Set([
+      'about', 'above', 'across', 'after', 'against', 'along', 'among', 'around', 'at',
+      'before', 'behind', 'below', 'beneath', 'beside', 'between', 'beyond', 'by',
+      'despite', 'down', 'during', 'except', 'for', 'from', 'in', 'inside', 'into',
+      'like', 'near', 'of', 'off', 'on', 'onto', 'out', 'outside', 'over', 'past',
+      'since', 'through', 'throughout', 'till', 'to', 'toward', 'under', 'underneath',
+      'until', 'up', 'upon', 'with', 'within', 'without'
+    ]);
+    
     const profileKeywords = allProfileText
       .toLowerCase()
       .split(/\s+/)
       .filter(word => word.length > 3) // Filter out short words
+      .filter(word => !prepositions.has(word)) // Exclude prepositions
       .filter((word, index, self) => self.indexOf(word) === index); // Remove duplicates
 
-    console.log('Extracted keywords:', profileKeywords);
+    console.log('Extracted keywords (prepositions filtered):', profileKeywords);
 
     const profileProvince = extractProfileField(profile, [
       'startup.location',
