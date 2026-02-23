@@ -12,6 +12,13 @@ import {
   getAIAnalysisFromIDB, 
   saveAIAnalysisToIDB 
 } from '../utils/tenderCacheDB';
+import { 
+  getTendersFromSupabase, 
+  saveTendersToSupabase, 
+  getAIKeywordsFromSupabase, 
+  saveAIKeywordsToSupabase,
+  syncCacheFromSupabase 
+} from '../utils/supabaseCache';
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -107,7 +114,13 @@ const SmartMatchedTenders = () => {
         const dateFrom = thirtyDaysAgo.toISOString().split('T')[0];
         const dateTo = today.toISOString().split('T')[0];
 
-        // 🚀 PHASE 0: Check IndexedDB first (fastest - 10-50ms)
+        // � PHASE -1: Sync cache from Supabase on login (cross-device sync)
+        console.log('🔄 Syncing cache from Supabase (cross-device)...');
+        await syncCacheFromSupabase().catch(err => {
+          console.warn('⚠️ Supabase sync failed (will use local cache):', err.message);
+        });
+
+        // �🚀 PHASE 0: Check IndexedDB first (fastest - 10-50ms)
         console.log('⚡ Checking IndexedDB cache...');
         const idbTenders = await getTendersFromIDB(dateFrom, dateTo);
         
@@ -119,22 +132,65 @@ const SmartMatchedTenders = () => {
           latestMatchedRef.current = matched;
           setLoading(false);
           
-          // Check for cached AI analysis
+          // Check for cached AI analysis (try IndexedDB first, then Supabase)
           const userId = profile?.profile?.user_id || profile?.user_id;
           if (userId) {
-            const cachedAI = await getAIAnalysisFromIDB(userId);
+            let cachedAI = await getAIAnalysisFromIDB(userId);
+            
+            // If not in IndexedDB, try Supabase
+            if (!cachedAI || !cachedAI.keywords) {
+              console.log('🔍 Checking Supabase for AI keywords...');
+              cachedAI = await getAIKeywordsFromSupabase(userId, profile);
+            }
+            
             if (cachedAI && cachedAI.keywords) {
-              console.log('🤖 Using cached AI keywords from IndexedDB');
+              console.log('🤖 Using cached AI keywords:', cachedAI.keywords);
               setExtractedKeywords(cachedAI.keywords);
             }
           }
           
           // Enhance with AI if no cached analysis
-          if (matched.length > 0) {
+          if (matched.length > 0 && (!extractedKeywords || extractedKeywords.length === 0)) {
             enhanceWithAI(matched, profile);
           }
           
           // Fetch fresh data in background (stale-while-revalidate)
+          console.log('🔄 Fetching fresh data in background...');
+          fetchFreshDataInBackground(dateFrom, dateTo, profile);
+          return;
+        }
+
+        // 🔍 PHASE 0.5: Check Supabase cache (cross-device sync)
+        console.log('🔍 Checking Supabase cache (cross-device)...');
+        const supabaseTenders = await getTendersFromSupabase(dateFrom, dateTo);
+        
+        if (supabaseTenders && supabaseTenders.length > 0) {
+          console.log('✅ Using Supabase cache - loaded from server!');
+          setAllTenders(supabaseTenders);
+          const matched = matchTendersToProfile(supabaseTenders, profile);
+          setMatchedTenders(matched);
+          latestMatchedRef.current = matched;
+          setLoading(false);
+          
+          // Save to session cache for 5min
+          cacheTenders(supabaseTenders, dateFrom, dateTo);
+          
+          // Check for AI keywords from Supabase
+          const userId = profile?.profile?.user_id || profile?.user_id;
+          if (userId) {
+            const cachedAI = await getAIKeywordsFromSupabase(userId, profile);
+            if (cachedAI && cachedAI.keywords) {
+              console.log('🤖 Using Supabase cached AI keywords');
+              setExtractedKeywords(cachedAI.keywords);
+            }
+          }
+          
+          // Enhance with AI if no cached analysis
+          if (matched.length > 0 && (!extractedKeywords || extractedKeywords.length === 0)) {
+            enhanceWithAI(matched, profile);
+          }
+          
+          // Fetch fresh data in background
           console.log('🔄 Fetching fresh data in background...');
           fetchFreshDataInBackground(dateFrom, dateTo, profile);
           return;
@@ -252,9 +308,17 @@ const SmartMatchedTenders = () => {
                 // Cache the combined result after last batch
                 if (i === batches.length - 1) {
                   cacheTenders(combined, dateFrom, dateTo);
-                  // Also save to IndexedDB for persistent cache
+                  
+                  // Save to IndexedDB for persistent cache
                   saveTendersToIDB(combined, dateFrom, dateTo).then(() => {
                     console.log('💾 Saved all tenders to IndexedDB for next reload');
+                  });
+                  
+                  // Save to Supabase for cross-device sync
+                  saveTendersToSupabase(combined, dateFrom, dateTo).then(() => {
+                    console.log('☁️ Saved all tenders to Supabase for cross-device sync');
+                  }).catch(err => {
+                    console.warn('⚠️ Failed to save to Supabase (local cache still available):', err.message);
                   });
                 }
                 
@@ -387,6 +451,13 @@ const SmartMatchedTenders = () => {
       if (userId) {
         saveAIAnalysisToIDB(userId, keywords, {}).then(() => {
           console.log('💾 Saved AI keywords to IndexedDB');
+        });
+        
+        // Also save to Supabase for cross-device sync
+        saveAIKeywordsToSupabase(userId, keywords, {}, profile).then(() => {
+          console.log('☁️ Saved AI keywords to Supabase for cross-device sync');
+        }).catch(err => {
+          console.warn('⚠️ Failed to save AI keywords to Supabase:', err.message);
         });
       }
 
