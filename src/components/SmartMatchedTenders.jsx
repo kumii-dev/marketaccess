@@ -226,8 +226,15 @@ const SmartMatchedTenders = () => {
         console.log('✅ All tenders loaded successfully');
 
         // PHASE 3: AI Enhancement (use ref to get latest matches)
+        console.log('🔍 Checking if AI enhancement should run...');
+        console.log('latestMatchedRef.current:', latestMatchedRef.current ? `${latestMatchedRef.current.length} tenders` : 'null/undefined');
+        console.log('profile:', profile ? 'exists' : 'null/undefined');
+        
         if (latestMatchedRef.current && latestMatchedRef.current.length > 0) {
+          console.log('✅ Conditions met, calling enhanceWithAI...');
           enhanceWithAI(latestMatchedRef.current, profile);
+        } else {
+          console.warn('⚠️ Skipping AI enhancement - no matched tenders or missing profile');
         }
 
       } catch (err) {
