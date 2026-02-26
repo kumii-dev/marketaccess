@@ -562,7 +562,7 @@ function App() {
             <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('smart-matched-tenders')}>
               Smart Matched Tenders
             </button>
-            <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
+            <button style={{display:'none'}} className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
               Private Tenders
             </button>
            
