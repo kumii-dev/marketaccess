@@ -1,15 +1,16 @@
 /* Z-index to ensure modal appears above all content including scroll overlays */
+
+/* Specific overlay for tender details modal - highest priority */
+.tender-details-overlay {
+  z-index: 1001 !important; /* Above navbar (999) and other modals (1000) */
+}
+
 .tender-details-modal {
   max-width: 900px;
   max-height: 90vh;
   overflow-y: auto;
   position: relative;
-  z-index: 1001; /* Above navbar (999) and other modals (1000) */
-}
-
-/* Ensure modal overlay has high z-index */
-.modal-overlay:has(.tender-details-modal) {
-  z-index: 1001; /* Match modal z-index */
+  z-index: 1002; /* Above the overlay */
 }
 
 .modal-tabs {

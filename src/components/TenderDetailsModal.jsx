@@ -1,8 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './TenderDetailsModal.css';
 
 const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
   const [activeTab, setActiveTab] = useState('overview');
+
+  // Lock body scroll when modal is open to prevent background flickering
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+
+    // Cleanup on unmount
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
 
   if (!isOpen || !tender) return null;
 
@@ -34,7 +48,7 @@ const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
   const briefingSession = tenderData.briefingSession || {};
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay tender-details-overlay" onClick={onClose}>
       <div className="modal-content tender-details-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <h2>{tenderData.title || 'Tender Details'}</h2>
