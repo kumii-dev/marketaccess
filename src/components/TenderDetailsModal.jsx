@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import './TenderDetailsModal.css';
 
 const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
@@ -7,23 +8,41 @@ const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
   // Lock body scroll when modal is open to prevent background flickering
   useEffect(() => {
     if (isOpen) {
+      // Save current scroll position
+      const scrollY = window.scrollY;
+      document.body.style.position = 'fixed';
+      document.body.style.top = `-${scrollY}px`;
+      document.body.style.width = '100%';
       document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed'; // Prevent scroll jump
-      document.body.style.width = '100%'; // Prevent layout shift
-      document.body.style.top = '0'; // Lock position
+      
+      // Store scroll position for restoration
+      document.body.setAttribute('data-scroll-position', scrollY.toString());
     } else {
-      document.body.style.overflow = 'unset';
-      document.body.style.position = 'static';
-      document.body.style.width = 'auto';
-      document.body.style.top = 'auto';
+      // Restore scroll position
+      const scrollY = document.body.getAttribute('data-scroll-position');
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY, 10));
+        document.body.removeAttribute('data-scroll-position');
+      }
     }
 
     // Cleanup on unmount
     return () => {
-      document.body.style.overflow = 'unset';
-      document.body.style.position = 'static';
-      document.body.style.width = 'auto';
-      document.body.style.top = 'auto';
+      const scrollY = document.body.getAttribute('data-scroll-position');
+      document.body.style.position = '';
+      document.body.style.top = '';
+      document.body.style.width = '';
+      document.body.style.overflow = '';
+      
+      if (scrollY) {
+        window.scrollTo(0, parseInt(scrollY, 10));
+        document.body.removeAttribute('data-scroll-position');
+      }
     };
   }, [isOpen]);
 
@@ -56,7 +75,8 @@ const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
   const documents = tenderData.documents || [];
   const briefingSession = tenderData.briefingSession || {};
 
-  return (
+  // Render modal at document root using Portal to prevent multiple overlays
+  return createPortal(
     <div className="modal-overlay tender-details-overlay" onClick={onClose}>
       <div className="modal-content tender-details-modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -318,7 +338,8 @@ const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
           <button className="btn-close" onClick={onClose}>Close</button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

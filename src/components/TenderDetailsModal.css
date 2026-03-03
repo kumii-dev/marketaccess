@@ -16,6 +16,17 @@
   overflow-y: auto !important;
   backdrop-filter: blur(4px); /* Add blur effect to background */
   -webkit-backdrop-filter: blur(4px); /* Safari support */
+  animation: fadeInOverlay 0.2s ease-out; /* Smooth appearance */
+  isolation: isolate; /* Create new stacking context */
+}
+
+@keyframes fadeInOverlay {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .tender-details-modal {
@@ -30,6 +41,19 @@
   will-change: transform; /* Optimize rendering */
   transform: translateZ(0); /* Force GPU acceleration */
   -webkit-transform: translateZ(0); /* Safari support */
+  animation: slideInModal 0.3s ease-out; /* Smooth slide in */
+  contain: layout style paint; /* Optimize rendering */
+}
+
+@keyframes slideInModal {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) translateZ(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) translateZ(0);
+  }
 }
 
 .modal-tabs {
