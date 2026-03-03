@@ -8,13 +8,22 @@ const TenderDetailsModal = ({ isOpen, onClose, tender }) => {
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      document.body.style.position = 'fixed'; // Prevent scroll jump
+      document.body.style.width = '100%'; // Prevent layout shift
+      document.body.style.top = '0'; // Lock position
     } else {
       document.body.style.overflow = 'unset';
+      document.body.style.position = 'static';
+      document.body.style.width = 'auto';
+      document.body.style.top = 'auto';
     }
 
     // Cleanup on unmount
     return () => {
       document.body.style.overflow = 'unset';
+      document.body.style.position = 'static';
+      document.body.style.width = 'auto';
+      document.body.style.top = 'auto';
     };
   }, [isOpen]);
 
