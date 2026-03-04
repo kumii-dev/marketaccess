@@ -193,8 +193,7 @@ SELECT
 FROM public.audit_logs al
 WHERE al.level IN ('CRITICAL', 'HIGH')
   OR al.category IN ('AUTHENTICATION', 'AUTHORIZATION', 'ACCESS_CONTROL', 'POLICY_VIOLATION')
-GROUP BY DATE(al.timestamp), al.category, al.level, al.result
-ORDER BY date DESC, event_count DESC;
+GROUP BY DATE(al.timestamp), al.category, al.level, al.result;
 
 -- ================================================================
 -- COMPLIANCE REPORT VIEW (ISO 27001 + NIST)
@@ -218,8 +217,7 @@ SELECT
   al.sensitive_data,
   al.user_email
 FROM public.audit_logs al
-WHERE array_length(al.frameworks, 1) > 0
-ORDER BY al.timestamp DESC;
+WHERE array_length(al.frameworks, 1) > 0;
 
 -- ================================================================
 -- AUDIT LOG RETENTION POLICY
