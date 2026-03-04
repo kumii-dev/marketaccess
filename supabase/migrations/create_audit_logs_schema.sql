@@ -28,7 +28,7 @@ CREATE TABLE public.audit_logs (
   -- created_at: when the event was recorded/ingested by the system
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   -- event_date: derived DATE column for efficient grouping and indexing
-  event_date DATE GENERATED ALWAYS AS (event_time::date) STORED NOT NULL,
+  event_date DATE GENERATED ALWAYS AS ((event_time AT TIME ZONE 'UTC')::date) STORED NOT NULL,
 
   -- Session and correlation tracking
   session_id TEXT NOT NULL,
