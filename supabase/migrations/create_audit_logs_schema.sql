@@ -3,6 +3,9 @@
 -- Compliance: ISO 27001, NIST SP 800-53, OWASP, GDPR, POPIA
 -- ================================================================
 
+-- Enable required extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
 -- Drop existing table if it exists (development only)
 -- DROP TABLE IF EXISTS public.audit_logs CASCADE;
 
@@ -91,34 +94,34 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 -- ================================================================
 
 -- Time-based queries (most common)
-CREATE INDEX idx_audit_logs_event_time ON public.audit_logs(event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_event_time ON public.audit_logs(event_time DESC);
 
 -- User activity tracking
-CREATE INDEX idx_audit_logs_user_id ON public.audit_logs(user_id, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON public.audit_logs(user_id, event_time DESC);
 
 -- Category filtering
-CREATE INDEX idx_audit_logs_category ON public.audit_logs(category, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_category ON public.audit_logs(category, event_time DESC);
 
 -- Security event filtering
-CREATE INDEX idx_audit_logs_level ON public.audit_logs(level, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_level ON public.audit_logs(level, event_time DESC);
 
 -- Session tracking
-CREATE INDEX idx_audit_logs_session_id ON public.audit_logs(session_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_session_id ON public.audit_logs(session_id);
 
 -- Correlation tracking (distributed tracing)
-CREATE INDEX idx_audit_logs_correlation_id ON public.audit_logs(correlation_id) WHERE correlation_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_audit_logs_correlation_id ON public.audit_logs(correlation_id) WHERE correlation_id IS NOT NULL;
 
 -- Compliance framework queries
-CREATE INDEX idx_audit_logs_frameworks ON public.audit_logs USING GIN(frameworks);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_frameworks ON public.audit_logs USING GIN(frameworks);
 
 -- Sensitive data queries (GDPR/POPIA compliance)
-CREATE INDEX idx_audit_logs_sensitive ON public.audit_logs(sensitive_data, event_time DESC) WHERE sensitive_data = TRUE;
+CREATE INDEX IF NOT EXISTS idx_audit_logs_sensitive ON public.audit_logs(sensitive_data, event_time DESC) WHERE sensitive_data = TRUE;
 
 -- Metadata queries (JSONB indexing)
-CREATE INDEX idx_audit_logs_metadata ON public.audit_logs USING GIN(metadata);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_metadata ON public.audit_logs USING GIN(metadata);
 
 -- Combined index for common dashboard queries
-CREATE INDEX idx_audit_logs_dashboard ON public.audit_logs(level, category, event_time DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_dashboard ON public.audit_logs(level, category, event_time DESC);
 
 -- ================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -170,9 +173,9 @@ WHERE al.category = 'AI_OPERATION'
   AND al.metadata->>'cost' IS NOT NULL
 GROUP BY DATE(al.event_time), al.user_id, al.user_email;
 
--- Index for cost summary queries
-CREATE INDEX idx_ai_cost_summary_date ON public.ai_cost_summary(date DESC);
-CREATE INDEX idx_ai_cost_summary_user ON public.ai_cost_summary(user_id);
+-- Index for cost summary queries (note: indexes use materialized view column names)
+CREATE INDEX IF NOT EXISTS idx_ai_cost_summary_date ON public.ai_cost_summary(date DESC);
+CREATE INDEX IF NOT EXISTS idx_ai_cost_summary_user ON public.ai_cost_summary(user_id);
 
 -- Refresh schedule (run this periodically via cron or trigger)
 -- REFRESH MATERIALIZED VIEW CONCURRENTLY public.ai_cost_summary;
