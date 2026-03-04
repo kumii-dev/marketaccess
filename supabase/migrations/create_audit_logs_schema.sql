@@ -168,8 +168,7 @@ SELECT
 FROM public.audit_logs al
 WHERE al.category = 'AI_OPERATION'
   AND al.metadata->>'cost' IS NOT NULL
-GROUP BY DATE(al.timestamp), al.user_id, al.user_email
-ORDER BY date DESC, total_cost DESC;
+GROUP BY DATE(al.timestamp), al.user_id, al.user_email;
 
 -- Index for cost summary queries
 CREATE INDEX idx_ai_cost_summary_date ON public.ai_cost_summary(date DESC);
