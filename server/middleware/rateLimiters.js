@@ -69,7 +69,7 @@ export const aiEndpointLimiter = rateLimit({
       userId: req.user?.id || null,
       ip: req.ip,
       endpoint: req.path,
-      timestamp: new Date().toISOString(),
+      event_time: new Date().toISOString(),
       violationType: 'AI_RATE_LIMIT'
     });
 
@@ -141,7 +141,7 @@ export const tenderAnalysisLimiter = rateLimit({
       userId: req.user?.id || null,
       ip: req.ip,
       endpoint: req.path,
-      timestamp: new Date().toISOString(),
+      event_time: new Date().toISOString(),
       violationType: 'TENDER_ANALYSIS_LIMIT'
     });
 
@@ -177,7 +177,7 @@ export const authLimiter = rateLimit({
       userId: null,
       ip: req.ip,
       endpoint: req.path,
-      timestamp: new Date().toISOString(),
+      event_time: new Date().toISOString(),
       violationType: 'AUTH_BRUTE_FORCE'
     });
 
@@ -234,7 +234,7 @@ async function logRateLimitViolation(violation) {
       },
       body: JSON.stringify({
         batch: [{
-          timestamp: violation.timestamp,
+          event_time: violation.event_time,
           category: 'RATE_LIMIT',
           level: 'MEDIUM',
           action: 'Rate Limit Exceeded',

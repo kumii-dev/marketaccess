@@ -135,7 +135,7 @@ class AuditLogger {
     
     const logEntry = {
       // Core audit fields (NIST AU-3)
-      timestamp: new Date().toISOString(),
+      event_time: new Date().toISOString(),
       sessionId: this.sessionId,
       
       // User identification (ISO 27001 A.12.4.1)
@@ -212,7 +212,7 @@ class AuditLogger {
       const { error } = await supabase
         .from('audit_logs')
         .insert({
-          timestamp: logEntry.timestamp,
+          event_time: logEntry.event_time,
           session_id: logEntry.sessionId,
           user_id: logEntry.userId,
           user_email: logEntry.userEmail,
@@ -261,7 +261,7 @@ class AuditLogger {
           batchMetadata: {
             batchId: `batch-${Date.now()}`,
             batchSize: batch.length,
-            timestamp: new Date().toISOString()
+            event_time: new Date().toISOString()
           }
         })
       });
