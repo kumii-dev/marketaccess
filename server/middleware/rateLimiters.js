@@ -217,28 +217,44 @@ export const batchOperationLimiter = rateLimit({
 
 /**
  * Log rate limit violations for security monitoring
- * TODO: Integrate with Supabase logging table
+ * Integrated with enterprise audit logging system
  * @param {Object} violation - Violation details
  */
-function logRateLimitViolation(violation) {
-  // For now, just console log
-  // TODO: Send to Supabase ai_security_logs table
+async function logRateLimitViolation(violation) {
   console.log('📊 Rate Limit Violation:', JSON.stringify(violation, null, 2));
   
-  // TODO: Implement Supabase logging
-  /*
-  await supabase
-    .from('ai_security_logs')
-    .insert({
-      user_id: violation.userId,
-      ip_address: violation.ip,
-      event_type: 'RATE_LIMIT_VIOLATION',
-      endpoint: violation.endpoint,
-      violation_type: violation.violationType,
-      timestamp: violation.timestamp,
-      severity: 'MEDIUM'
+  // Send to centralized audit logging system
+  try {
+    await fetch('https://kumii.africa/admin/audit-logs', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': process.env.AUDIT_API_KEY || 'development-key',
+        'X-Application': 'MarketAccess-Server',
+      },
+      body: JSON.stringify({
+        batch: [{
+          timestamp: violation.timestamp,
+          category: 'RATE_LIMIT',
+          level: 'MEDIUM',
+          action: 'Rate Limit Exceeded',
+          resource: violation.endpoint,
+          result: 'BLOCKED',
+          userId: violation.userId || 'anonymous',
+          sourceIp: violation.ip,
+          frameworks: ['OWASP_API', 'ISO27001'],
+          metadata: {
+            violationType: violation.violationType,
+            endpoint: violation.endpoint,
+            owaspCategory: 'API4:2023 - Unrestricted Resource Consumption',
+            iso27001Control: 'A.12.1.3'
+          }
+        }]
+      })
     });
-  */
+  } catch (err) {
+    console.warn('⚠️ Failed to send audit log:', err.message);
+  }
 }
 
 /**
