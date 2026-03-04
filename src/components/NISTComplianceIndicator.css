@@ -1,0 +1,302 @@
+.nist-compliance-indicator {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.nist-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: white;
+  border: 2px solid #e5e7eb;
+  border-radius: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.nist-badge:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
+  transform: translateY(-2px);
+}
+
+.nist-icon {
+  font-size: 18px;
+}
+
+.nist-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.nist-score {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 2px 8px;
+  background: #f3f4f6;
+  border-radius: 12px;
+}
+
+.nist-details-panel {
+  position: absolute;
+  bottom: 70px;
+  right: 0;
+  width: 480px;
+  max-height: 600px;
+  overflow-y: auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.nist-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e5e7eb;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 12px 12px 0 0;
+}
+
+.nist-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.close-btn {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 28px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.nist-summary {
+  display: flex;
+  gap: 20px;
+  padding: 24px;
+  background: #f9fafb;
+}
+
+.compliance-ring {
+  width: 100px;
+  height: 100px;
+  flex-shrink: 0;
+}
+
+.compliance-ring svg {
+  width: 100%;
+  height: 100%;
+}
+
+.compliance-stats {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.compliance-status {
+  font-size: 16px;
+  margin: 0;
+  color: #111827;
+}
+
+.compliance-checks {
+  font-size: 14px;
+  margin: 0;
+  color: #6b7280;
+}
+
+.nist-functions {
+  padding: 20px;
+}
+
+.nist-function {
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.nist-function:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.function-header {
+  margin-bottom: 12px;
+}
+
+.function-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #667eea;
+}
+
+.function-name {
+  display: block;
+  font-size: 13px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.function-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.check-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px;
+  background: #f9fafb;
+  border-radius: 6px;
+}
+
+.check-status {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.check-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+
+.check-id {
+  font-size: 12px;
+  font-weight: 600;
+  color: #667eea;
+}
+
+.check-description {
+  font-size: 13px;
+  color: #374151;
+}
+
+.nist-recommendations {
+  padding: 20px;
+  background: #fef3c7;
+  border-top: 1px solid #e5e7eb;
+}
+
+.nist-recommendations h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.nist-recommendations ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.nist-recommendations li {
+  font-size: 13px;
+  color: #78350f;
+  margin-bottom: 6px;
+}
+
+.nist-footer {
+  padding: 20px;
+  background: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  border-radius: 0 0 12px 12px;
+}
+
+.nist-footer p {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.nist-footer code {
+  background: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  color: #667eea;
+}
+
+.nist-link {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #667eea;
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.nist-link:hover {
+  background: #5568d3;
+  transform: translateX(2px);
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .nist-compliance-indicator {
+    bottom: 80px;
+    right: 10px;
+  }
+
+  .nist-details-panel {
+    width: calc(100vw - 20px);
+    max-width: 400px;
+    max-height: 500px;
+  }
+
+  .nist-badge {
+    padding: 8px 12px;
+    gap: 6px;
+  }
+
+  .nist-label {
+    font-size: 11px;
+  }
+
+  .nist-score {
+    font-size: 12px;
+  }
+}
