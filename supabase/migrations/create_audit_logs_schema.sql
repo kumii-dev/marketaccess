@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   
   -- Temporal tracking (NIST AU-3)
-  timestamp TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  event_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   
   -- Session tracking
@@ -91,16 +91,16 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 -- ================================================================
 
 -- Time-based queries (most common)
-CREATE INDEX idx_audit_logs_timestamp ON public.audit_logs(timestamp DESC);
+CREATE INDEX idx_audit_logs_event_time ON public.audit_logs(event_time DESC);
 
 -- User activity tracking
-CREATE INDEX idx_audit_logs_user_id ON public.audit_logs(user_id, timestamp DESC);
+CREATE INDEX idx_audit_logs_user_id ON public.audit_logs(user_id, event_time DESC);
 
 -- Category filtering
-CREATE INDEX idx_audit_logs_category ON public.audit_logs(category, timestamp DESC);
+CREATE INDEX idx_audit_logs_category ON public.audit_logs(category, event_time DESC);
 
 -- Security event filtering
-CREATE INDEX idx_audit_logs_level ON public.audit_logs(level, timestamp DESC);
+CREATE INDEX idx_audit_logs_level ON public.audit_logs(level, event_time DESC);
 
 -- Session tracking
 CREATE INDEX idx_audit_logs_session_id ON public.audit_logs(session_id);
@@ -112,13 +112,13 @@ CREATE INDEX idx_audit_logs_correlation_id ON public.audit_logs(correlation_id) 
 CREATE INDEX idx_audit_logs_frameworks ON public.audit_logs USING GIN(frameworks);
 
 -- Sensitive data queries (GDPR/POPIA compliance)
-CREATE INDEX idx_audit_logs_sensitive ON public.audit_logs(sensitive_data, timestamp DESC) WHERE sensitive_data = TRUE;
+CREATE INDEX idx_audit_logs_sensitive ON public.audit_logs(sensitive_data, event_time DESC) WHERE sensitive_data = TRUE;
 
 -- Metadata queries (JSONB indexing)
 CREATE INDEX idx_audit_logs_metadata ON public.audit_logs USING GIN(metadata);
 
 -- Combined index for common dashboard queries
-CREATE INDEX idx_audit_logs_dashboard ON public.audit_logs(level, category, timestamp DESC);
+CREATE INDEX idx_audit_logs_dashboard ON public.audit_logs(level, category, event_time DESC);
 
 -- ================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
@@ -157,7 +157,7 @@ CREATE POLICY audit_logs_service_insert ON public.audit_logs
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS public.ai_cost_summary AS
 SELECT
-  DATE(al.timestamp) as date,
+  DATE(al.event_time) as date,
   al.user_id,
   al.user_email,
   COUNT(*) as ai_call_count,
@@ -168,7 +168,7 @@ SELECT
 FROM public.audit_logs al
 WHERE al.category = 'AI_OPERATION'
   AND al.metadata->>'cost' IS NOT NULL
-GROUP BY DATE(al.timestamp), al.user_id, al.user_email;
+GROUP BY DATE(al.event_time), al.user_id, al.user_email;
 
 -- Index for cost summary queries
 CREATE INDEX idx_ai_cost_summary_date ON public.ai_cost_summary(date DESC);
@@ -183,7 +183,7 @@ CREATE INDEX idx_ai_cost_summary_user ON public.ai_cost_summary(user_id);
 
 CREATE OR REPLACE VIEW public.security_events_summary AS
 SELECT
-  DATE(al.timestamp) as date,
+  DATE(al.event_time) as date,
   al.category,
   al.level,
   al.result,
@@ -193,7 +193,7 @@ SELECT
 FROM public.audit_logs al
 WHERE al.level IN ('CRITICAL', 'HIGH')
   OR al.category IN ('AUTHENTICATION', 'AUTHORIZATION', 'ACCESS_CONTROL', 'POLICY_VIOLATION')
-GROUP BY DATE(al.timestamp), al.category, al.level, al.result;
+GROUP BY DATE(al.event_time), al.category, al.level, al.result;
 
 -- ================================================================
 -- COMPLIANCE REPORT VIEW (ISO 27001 + NIST)
@@ -202,7 +202,7 @@ GROUP BY DATE(al.timestamp), al.category, al.level, al.result;
 CREATE OR REPLACE VIEW public.compliance_events AS
 SELECT
   al.id,
-  al.timestamp,
+  al.event_time,
   al.category,
   al.level,
   al.action,
@@ -234,15 +234,15 @@ BEGIN
   -- For now, just count how many would be archived
   SELECT COUNT(*) INTO archived_count
   FROM public.audit_logs al
-  WHERE al.timestamp < NOW() - INTERVAL '90 days';
+  WHERE al.event_time < NOW() - INTERVAL '90 days';
   
   -- TODO: Move to archive table
   -- INSERT INTO public.audit_logs_archive
   -- SELECT * FROM public.audit_logs al
-  -- WHERE al.timestamp < NOW() - INTERVAL '90 days';
+  -- WHERE al.event_time < NOW() - INTERVAL '90 days';
   
   -- DELETE FROM public.audit_logs
-  -- WHERE timestamp < NOW() - INTERVAL '90 days';
+  -- WHERE event_time < NOW() - INTERVAL '90 days';
   
   RETURN archived_count;
 END;
@@ -267,11 +267,11 @@ BEGIN
     'FAILED_AUTH_SPIKE'::TEXT,
     'High number of failed authentication attempts'::TEXT,
     COUNT(*),
-    MAX(al.timestamp)
+    MAX(al.event_time)
   FROM public.audit_logs al
   WHERE al.category = 'AUTHENTICATION'
     AND al.result = 'FAILURE'
-    AND al.timestamp > NOW() - INTERVAL '1 hour'
+    AND al.event_time > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 5;
   
   -- Rate limit violations (> 10 in last hour)
@@ -280,10 +280,10 @@ BEGIN
     'RATE_LIMIT_ABUSE'::TEXT,
     'Excessive rate limit violations detected'::TEXT,
     COUNT(*),
-    MAX(al.timestamp)
+    MAX(al.event_time)
   FROM public.audit_logs al
   WHERE al.category = 'RATE_LIMIT'
-    AND al.timestamp > NOW() - INTERVAL '1 hour'
+    AND al.event_time > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 10;
   
   -- Unauthorized PII access
@@ -292,11 +292,11 @@ BEGIN
     'UNAUTHORIZED_PII_ACCESS'::TEXT,
     'Unauthorized PII access attempts detected'::TEXT,
     COUNT(*),
-    MAX(al.timestamp)
+    MAX(al.event_time)
   FROM public.audit_logs al
   WHERE al.category = 'PII_ACCESS'
     AND al.result = 'FAILURE'
-    AND al.timestamp > NOW() - INTERVAL '1 hour'
+    AND al.event_time > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 0;
   
   -- Critical system errors
@@ -305,10 +305,10 @@ BEGIN
     'CRITICAL_SYSTEM_ERROR'::TEXT,
     'Critical system errors detected'::TEXT,
     COUNT(*),
-    MAX(al.timestamp)
+    MAX(al.event_time)
   FROM public.audit_logs al
   WHERE al.level = 'CRITICAL'
-    AND al.timestamp > NOW() - INTERVAL '1 hour'
+    AND al.event_time > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 0;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -320,16 +320,18 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Get all critical events from last 24 hours
 -- SELECT * FROM public.audit_logs
 -- WHERE level = 'CRITICAL'
---   AND timestamp > NOW() - INTERVAL '24 hours'
--- ORDER BY timestamp DESC;
+--   AND event_time > NOW() - INTERVAL '24 hours'
+-- ORDER BY event_time DESC;
 
 -- Get AI cost summary for today
 -- SELECT * FROM public.ai_cost_summary
--- WHERE date = CURRENT_DATE;
+-- WHERE date = CURRENT_DATE
+-- ORDER BY total_cost DESC;
 
 -- Get security events summary
 -- SELECT * FROM public.security_events_summary
--- WHERE date >= CURRENT_DATE - INTERVAL '7 days';
+-- WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+-- ORDER BY date DESC, event_count DESC;
 
 -- Check for critical security events
 -- SELECT * FROM check_critical_security_events();
@@ -337,7 +339,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Get compliance events for specific framework
 -- SELECT * FROM public.compliance_events
 -- WHERE 'ISO27001' = ANY(frameworks)
--- ORDER BY timestamp DESC
+-- ORDER BY event_time DESC
 -- LIMIT 100;
 
 -- ================================================================
