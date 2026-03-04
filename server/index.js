@@ -1,19 +1,40 @@
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
+import { 
+  generalApiLimiter, 
+  authLimiter, // TODO: Apply to /api/auth/* endpoints when implemented
+  rateLimitCostEstimate 
+} from './middleware/rateLimiters.js';
+import aiRoutes from './routes/ai.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware - Configure CORS to allow requests from any origin
+// 🔒 SECURITY: Configure CORS (TODO: Whitelist specific origins in production)
 app.use(cors({
-  origin: '*', // Allow all origins
+  origin: '*', // ⚠️ WARNING: Allow all origins (change in production)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: false
 }));
 
 app.use(express.json());
+
+// 🔒 SECURITY: Apply general rate limiting to all API routes
+app.use('/api/', generalApiLimiter);
+
+// 🔒 SECURITY: Mount AI routes with specific rate limiters
+app.use('/api/ai', aiRoutes);
+
+// Print cost estimates on startup
+console.log('\n🔒 Rate Limiting Enabled:');
+console.log('   General API: 100 requests / 15 min');
+console.log('   AI Endpoints: 120 calls / hour per user');
+console.log('   Keyword Extraction: 50 calls / hour per user');
+console.log('   Tender Analysis: 30 calls / hour per user');
+console.log('   Authentication: 5 attempts / 15 min');
+rateLimitCostEstimate.printEstimate();
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
