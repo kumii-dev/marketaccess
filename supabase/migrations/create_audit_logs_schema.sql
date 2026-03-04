@@ -157,18 +157,18 @@ CREATE POLICY audit_logs_service_insert ON public.audit_logs
 
 CREATE MATERIALIZED VIEW IF NOT EXISTS public.ai_cost_summary AS
 SELECT
-  DATE(timestamp) as date,
-  user_id,
-  user_email,
+  DATE(al.timestamp) as date,
+  al.user_id,
+  al.user_email,
   COUNT(*) as ai_call_count,
-  SUM((metadata->>'tokensUsed')::NUMERIC) as total_tokens,
-  SUM((metadata->>'cost')::NUMERIC) as total_cost,
-  AVG((metadata->>'cost')::NUMERIC) as avg_cost_per_call,
-  MAX((metadata->>'cost')::NUMERIC) as max_cost_per_call
-FROM public.audit_logs
-WHERE category = 'AI_OPERATION'
-  AND metadata->>'cost' IS NOT NULL
-GROUP BY DATE(timestamp), user_id, user_email
+  SUM((al.metadata->>'tokensUsed')::NUMERIC) as total_tokens,
+  SUM((al.metadata->>'cost')::NUMERIC) as total_cost,
+  AVG((al.metadata->>'cost')::NUMERIC) as avg_cost_per_call,
+  MAX((al.metadata->>'cost')::NUMERIC) as max_cost_per_call
+FROM public.audit_logs al
+WHERE al.category = 'AI_OPERATION'
+  AND al.metadata->>'cost' IS NOT NULL
+GROUP BY DATE(al.timestamp), al.user_id, al.user_email
 ORDER BY date DESC, total_cost DESC;
 
 -- Index for cost summary queries
@@ -184,17 +184,17 @@ CREATE INDEX idx_ai_cost_summary_user ON public.ai_cost_summary(user_id);
 
 CREATE OR REPLACE VIEW public.security_events_summary AS
 SELECT
-  DATE(timestamp) as date,
-  category,
-  level,
-  result,
+  DATE(al.timestamp) as date,
+  al.category,
+  al.level,
+  al.result,
   COUNT(*) as event_count,
-  COUNT(DISTINCT user_id) as unique_users,
-  COUNT(DISTINCT source_ip) as unique_ips
-FROM public.audit_logs
-WHERE level IN ('CRITICAL', 'HIGH')
-  OR category IN ('AUTHENTICATION', 'AUTHORIZATION', 'ACCESS_CONTROL', 'POLICY_VIOLATION')
-GROUP BY DATE(timestamp), category, level, result
+  COUNT(DISTINCT al.user_id) as unique_users,
+  COUNT(DISTINCT al.source_ip) as unique_ips
+FROM public.audit_logs al
+WHERE al.level IN ('CRITICAL', 'HIGH')
+  OR al.category IN ('AUTHENTICATION', 'AUTHORIZATION', 'ACCESS_CONTROL', 'POLICY_VIOLATION')
+GROUP BY DATE(al.timestamp), al.category, al.level, al.result
 ORDER BY date DESC, event_count DESC;
 
 -- ================================================================
@@ -203,24 +203,24 @@ ORDER BY date DESC, event_count DESC;
 
 CREATE OR REPLACE VIEW public.compliance_events AS
 SELECT
-  id,
-  timestamp,
-  category,
-  level,
-  action,
-  resource,
-  result,
-  frameworks,
-  metadata->>'iso27001Control' as iso27001_control,
-  metadata->>'nistControl' as nist_control,
-  metadata->>'owaspCategory' as owasp_category,
-  metadata->>'gdprArticle' as gdpr_article,
-  metadata->>'popiaSection' as popia_section,
-  sensitive_data,
-  user_email
-FROM public.audit_logs
-WHERE array_length(frameworks, 1) > 0
-ORDER BY timestamp DESC;
+  al.id,
+  al.timestamp,
+  al.category,
+  al.level,
+  al.action,
+  al.resource,
+  al.result,
+  al.frameworks,
+  al.metadata->>'iso27001Control' as iso27001_control,
+  al.metadata->>'nistControl' as nist_control,
+  al.metadata->>'owaspCategory' as owasp_category,
+  al.metadata->>'gdprArticle' as gdpr_article,
+  al.metadata->>'popiaSection' as popia_section,
+  al.sensitive_data,
+  al.user_email
+FROM public.audit_logs al
+WHERE array_length(al.frameworks, 1) > 0
+ORDER BY al.timestamp DESC;
 
 -- ================================================================
 -- AUDIT LOG RETENTION POLICY
@@ -236,13 +236,13 @@ BEGIN
   -- In production, move to archive table instead of deleting
   -- For now, just count how many would be archived
   SELECT COUNT(*) INTO archived_count
-  FROM public.audit_logs
-  WHERE timestamp < NOW() - INTERVAL '90 days';
+  FROM public.audit_logs al
+  WHERE al.timestamp < NOW() - INTERVAL '90 days';
   
   -- TODO: Move to archive table
   -- INSERT INTO public.audit_logs_archive
-  -- SELECT * FROM public.audit_logs
-  -- WHERE timestamp < NOW() - INTERVAL '90 days';
+  -- SELECT * FROM public.audit_logs al
+  -- WHERE al.timestamp < NOW() - INTERVAL '90 days';
   
   -- DELETE FROM public.audit_logs
   -- WHERE timestamp < NOW() - INTERVAL '90 days';
@@ -270,11 +270,11 @@ BEGIN
     'FAILED_AUTH_SPIKE'::TEXT,
     'High number of failed authentication attempts'::TEXT,
     COUNT(*),
-    MAX(timestamp)
-  FROM public.audit_logs
-  WHERE category = 'AUTHENTICATION'
-    AND result = 'FAILURE'
-    AND timestamp > NOW() - INTERVAL '1 hour'
+    MAX(al.timestamp)
+  FROM public.audit_logs al
+  WHERE al.category = 'AUTHENTICATION'
+    AND al.result = 'FAILURE'
+    AND al.timestamp > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 5;
   
   -- Rate limit violations (> 10 in last hour)
@@ -283,10 +283,10 @@ BEGIN
     'RATE_LIMIT_ABUSE'::TEXT,
     'Excessive rate limit violations detected'::TEXT,
     COUNT(*),
-    MAX(timestamp)
-  FROM public.audit_logs
-  WHERE category = 'RATE_LIMIT'
-    AND timestamp > NOW() - INTERVAL '1 hour'
+    MAX(al.timestamp)
+  FROM public.audit_logs al
+  WHERE al.category = 'RATE_LIMIT'
+    AND al.timestamp > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 10;
   
   -- Unauthorized PII access
@@ -295,11 +295,11 @@ BEGIN
     'UNAUTHORIZED_PII_ACCESS'::TEXT,
     'Unauthorized PII access attempts detected'::TEXT,
     COUNT(*),
-    MAX(timestamp)
-  FROM public.audit_logs
-  WHERE category = 'PII_ACCESS'
-    AND result = 'FAILURE'
-    AND timestamp > NOW() - INTERVAL '1 hour'
+    MAX(al.timestamp)
+  FROM public.audit_logs al
+  WHERE al.category = 'PII_ACCESS'
+    AND al.result = 'FAILURE'
+    AND al.timestamp > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 0;
   
   -- Critical system errors
@@ -308,10 +308,10 @@ BEGIN
     'CRITICAL_SYSTEM_ERROR'::TEXT,
     'Critical system errors detected'::TEXT,
     COUNT(*),
-    MAX(timestamp)
-  FROM public.audit_logs
-  WHERE level = 'CRITICAL'
-    AND timestamp > NOW() - INTERVAL '1 hour'
+    MAX(al.timestamp)
+  FROM public.audit_logs al
+  WHERE al.level = 'CRITICAL'
+    AND al.timestamp > NOW() - INTERVAL '1 hour'
   HAVING COUNT(*) > 0;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
