@@ -17,6 +17,7 @@ import {
   scrubPII,
   buildSecurePrompt
 } from './aiSecurityControls.js';
+import { logAICall, logSystemError } from './auditLogger.js';
 
 const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.OPENAI_API_KEY;
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
@@ -109,9 +110,12 @@ Example: ["construction", "infrastructure", "project management", "civil enginee
       body: JSON.stringify(securePrompt)
     });
 
+    const callStart = Date.now();
+
     if (!response.ok) {
       const error = await response.text();
       console.error('OpenAI API error (keyword extraction):', error);
+      logSystemError(new Error(error), 'extractKeywordsFromBio', 'HIGH', { endpoint: 'keyword-extraction' });
       return [];
     }
 
@@ -134,11 +138,22 @@ Example: ["construction", "infrastructure", "project management", "civil enginee
     // 🔒 SECURITY: Scrub PII from outputs (NIST GOVERN-3.1)
     const safeKeywords = keywords.map(kw => scrubPII(kw));
 
+    // 📊 AUDIT: Log AI keyword extraction (NIST AI RMF MEASURE)
+    const tokensUsed = data.usage?.total_tokens || 0;
+    const cost = tokensUsed * 0.00000015; // gpt-4o-mini input pricing
+    logAICall('gpt-4o-mini', tokensUsed, cost, {
+      operation: 'keyword-extraction',
+      durationMs: Date.now() - callStart,
+      nistAIFunction: 'MEASURE',
+      outputKeywords: safeKeywords.length
+    });
+
     console.log('✅ Extracted keywords from bio:', safeKeywords);
     return safeKeywords;
     
   } catch (error) {
     console.error('Error extracting keywords from bio:', error);
+    logSystemError(error, 'extractKeywordsFromBio', 'MEDIUM', {});
     return [];
   }
 }
@@ -225,9 +240,12 @@ Respond ONLY with valid JSON.`;
       body: JSON.stringify(securePrompt)
     });
 
+    const analysisStart = Date.now();
+
     if (!response.ok) {
       const error = await response.text();
       console.error('OpenAI API error (tender analysis):', error);
+      logSystemError(new Error(error), 'analyzeTenderWithKeywords', 'HIGH', { tenderId: tender.ocid });
       return null;
     }
 
@@ -256,6 +274,19 @@ Respond ONLY with valid JSON.`;
     // 🔒 SECURITY: Scrub PII from AI output (NIST GOVERN-3.1)
     const safeRecommendation = scrubPII(analysis.recommendation || '');
     const safeReasons = (analysis.topReasons || []).map(r => scrubPII(r));
+
+    // 📊 AUDIT: Log AI tender analysis (NIST AI RMF MEASURE)
+    const tokensUsed = data.usage?.total_tokens || 0;
+    const cost = tokensUsed * 0.00000060; // gpt-4o-mini output pricing
+    logAICall('gpt-4o-mini', tokensUsed, cost, {
+      operation: 'tender-analysis',
+      durationMs: Date.now() - analysisStart,
+      tenderId: tender.ocid,
+      matchScore: analysis.matchScore,
+      confidence: analysis.confidenceLevel,
+      validationConfidence: validation.confidence,
+      nistAIFunction: 'MEASURE'
+    });
     
     return {
       aiScore: analysis.matchScore || 0,
@@ -273,6 +304,7 @@ Respond ONLY with valid JSON.`;
     
   } catch (error) {
     console.error('Error in AI tender analysis:', error);
+    logSystemError(error, 'analyzeTenderWithKeywords', 'MEDIUM', { tenderId: tender?.ocid });
     return null;
   }
 }
@@ -360,9 +392,12 @@ Respond ONLY with valid JSON, no other text.`;
       })
     });
 
+    const matchStart = Date.now();
+
     if (!response.ok) {
       const error = await response.text();
       console.error('OpenAI API error:', error);
+      logSystemError(new Error(error), 'analyzeMatch', 'HIGH', { tenderId: tender.ocid });
       return null;
     }
 
@@ -376,6 +411,18 @@ Respond ONLY with valid JSON, no other text.`;
 
     // Parse JSON response
     const analysis = JSON.parse(content);
+
+    // 📊 AUDIT: Log AI match analysis (NIST AI RMF MEASURE)
+    const tokensUsed = data.usage?.total_tokens || 0;
+    const cost = tokensUsed * 0.00000060;
+    logAICall('gpt-4o-mini', tokensUsed, cost, {
+      operation: 'match-analysis',
+      durationMs: Date.now() - matchStart,
+      tenderId: tender.ocid,
+      matchScore: analysis.matchScore,
+      confidence: analysis.confidenceLevel,
+      nistAIFunction: 'MEASURE'
+    });
     
     return {
       aiScore: analysis.matchScore || 0,
@@ -387,6 +434,7 @@ Respond ONLY with valid JSON, no other text.`;
     
   } catch (error) {
     console.error('Error in AI match analysis:', error);
+    logSystemError(error, 'analyzeMatch', 'MEDIUM', { tenderId: tender?.ocid });
     return null;
   }
 }

@@ -12,6 +12,8 @@ import TopNavbar from './components/TopNavbar';
 import { getCachedTenders, cacheTenders } from './utils/tenderCache';
 import { getTendersFromIDB, saveTendersToIDB } from './utils/tenderCacheDB';
 import { getTendersFromSupabase, saveTendersToSupabase, syncCacheFromSupabase } from './utils/supabaseCache';
+import { supabase } from './lib/supabase';
+import { logAuthSuccess, logAuthFailure, logSystemError } from './utils/auditLogger';
 import './App.css';
 
 function App() {
@@ -55,6 +57,47 @@ function App() {
     syncCacheFromSupabase().catch(err => {
       console.warn('⚠️ Supabase sync on mount failed:', err.message);
     });
+  }, []);
+
+  // 📊 AUDIT: Listen for Supabase auth state changes and emit audit events
+  // ISO 27001 A.9.4.1 — Information Access Restriction
+  // NIST SP 800-53 IA-2 — Identification & Authentication
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      const userEmail = session?.user?.email || null;
+      const userId    = session?.user?.id    || null;
+
+      if (event === 'SIGNED_IN') {
+        logAuthSuccess({
+          userId,
+          userEmail,
+          provider: session?.user?.app_metadata?.provider || 'email',
+          iso27001Control: 'A.9.4.1',
+          nistControl: 'IA-2'
+        });
+      } else if (event === 'SIGNED_OUT') {
+        logAuthSuccess({
+          userId,
+          userEmail,
+          action: 'Logout',
+          iso27001Control: 'A.9.4.1',
+          nistControl: 'AC-12' // Session Termination
+        });
+      } else if (event === 'TOKEN_REFRESHED') {
+        // INFO-level — normal session maintenance, no noise
+      } else if (event === 'USER_UPDATED') {
+        logAuthSuccess({
+          userId,
+          userEmail,
+          action: 'Profile Updated',
+          iso27001Control: 'A.9.4.1',
+          nistControl: 'IA-5'
+        });
+      }
+    });
+
+    // Cleanup listener on unmount
+    return () => subscription.unsubscribe();
   }, []);
 
   // Client-side filtering and sorting
@@ -469,6 +512,7 @@ function App() {
 
       console.error('Error loading tenders:', err);
       setError(err.message || 'Failed to load tenders. Please try again.');
+      logSystemError(err, 'App.loadTenders', 'MEDIUM', { dateFrom: from, dateTo: to });
       setAllTenders([]);
       setIsLoadingMore(false);
     } finally {

@@ -15,7 +15,7 @@
  * - Compliance Events (rate limits, policy violations)
  */
 
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabase';
 
 /**
  * Audit Log Levels (ISO 27001 severity classification)
@@ -109,7 +109,7 @@ class AuditLogger {
         email: user?.email || null,
         role: user?.user_metadata?.role || 'user'
       };
-    } catch (err) {
+    } catch {
       return {
         userId: 'anonymous',
         email: null,

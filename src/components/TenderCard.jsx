@@ -6,6 +6,7 @@ import {
   formatDate 
 } from '../lib/api';
 import TenderDetailsModal from './TenderDetailsModal';
+import { logTenderView } from '../utils/auditLogger';
 import './TenderCard.css';
 
 const TenderCard = ({ tender }) => {
@@ -155,7 +156,15 @@ const TenderCard = ({ tender }) => {
       <div className="tender-card-footer">
         <button 
           className="view-details-btn"
-          onClick={() => setIsDetailsOpen(true)}
+          onClick={() => {
+            setIsDetailsOpen(true);
+            logTenderView(ocid, title, {
+              buyer,
+              category,
+              closingDate: endDate,
+              source: 'TenderCard'
+            });
+          }}
         >
           <i className="bi bi-info-circle"></i>
           View Details

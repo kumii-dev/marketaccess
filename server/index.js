@@ -7,6 +7,7 @@ import {
   rateLimitCostEstimate 
 } from './middleware/rateLimiters.js';
 import aiRoutes from './routes/ai.js';
+import auditRoutes from './routes/audit.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,17 +16,20 @@ const PORT = process.env.PORT || 3001;
 app.use(cors({
   origin: '*', // ⚠️ WARNING: Allow all origins (change in production)
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-API-Key', 'X-Application', 'X-Batch-Size'],
   credentials: false
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' })); // Audit batches can be ~100 entries
 
 // 🔒 SECURITY: Apply general rate limiting to all API routes
 app.use('/api/', generalApiLimiter);
 
 // 🔒 SECURITY: Mount AI routes with specific rate limiters
 app.use('/api/ai', aiRoutes);
+
+// 📊 AUDIT: Mount audit log receiver — ISO 27001, NIST SP 800-53, OWASP
+app.use('/admin/audit-logs', auditRoutes);
 
 // Print cost estimates on startup
 console.log('\n🔒 Rate Limiting Enabled:');
@@ -34,6 +38,10 @@ console.log('   AI Endpoints: 120 calls / hour per user');
 console.log('   Keyword Extraction: 50 calls / hour per user');
 console.log('   Tender Analysis: 30 calls / hour per user');
 console.log('   Authentication: 5 attempts / 15 min');
+console.log('\n📊 Audit Logging Enabled:');
+console.log('   Receiver: POST /admin/audit-logs');
+console.log('   Health:   GET  /admin/audit-logs/health');
+console.log('   Stats:    GET  /admin/audit-logs/stats');
 rateLimitCostEstimate.printEstimate();
 
 // Health check endpoint
