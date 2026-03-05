@@ -10,6 +10,7 @@ import {
 } from './middleware/rateLimiters.js';
 import aiRoutes from './routes/ai.js';
 import auditRoutes from './routes/audit.js';
+import auditAIRoutes from './routes/auditAI.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -30,6 +31,9 @@ app.use('/api/', generalApiLimiter);
 // 🔒 SECURITY: Mount AI routes with specific rate limiters
 app.use('/api/ai', aiRoutes);
 
+// 🤖 AI AUDIT INTELLIGENCE: Threat summary, anomaly detection, compliance reports
+app.use('/api/ai/audit', auditAIRoutes);
+
 // 📊 AUDIT: Mount audit log receiver — ISO 27001, NIST SP 800-53, OWASP
 app.use('/admin/audit-logs', auditRoutes);
 
@@ -44,6 +48,10 @@ console.log('\n📊 Audit Logging Enabled:');
 console.log('   Receiver: POST /admin/audit-logs');
 console.log('   Health:   GET  /admin/audit-logs/health');
 console.log('   Stats:    GET  /admin/audit-logs/stats');
+console.log('\n🤖 AI Audit Intelligence Enabled:');
+console.log('   Threat Summary:     POST /api/ai/audit/threat-summary');
+console.log('   Anomaly Detection:  POST /api/ai/audit/anomaly-detect');
+console.log('   Compliance Report:  POST /api/ai/audit/compliance-report');
 rateLimitCostEstimate.printEstimate();
 
 // Health check endpoint
