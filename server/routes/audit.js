@@ -19,14 +19,20 @@ import { createClient } from '@supabase/supabase-js';
 
 const router = express.Router();
 
-// ── Supabase admin client (service-role, server-side only) ───────
-const supabaseAdmin = createClient(
-  process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-  {
+// ── Supabase admin client (lazy — created on first request, not at import time)
+// This prevents FUNCTION_INVOCATION_FAILED on Vercel where env vars are not
+// available during module initialisation (ESM import phase).
+let _supabaseAdmin = null;
+function getSupabaseAdmin() {
+  if (_supabaseAdmin) return _supabaseAdmin;
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!url || !key) return null; // fallback: log to stdout only
+  _supabaseAdmin = createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false }
-  }
-);
+  });
+  return _supabaseAdmin;
+}
 
 // ── Allowed categories / levels / results (mirrors SQL constraints)
 const VALID_CATEGORIES = new Set([
@@ -146,7 +152,7 @@ router.post('/', async (req, res) => {
     let dbError  = null;
 
     if (accepted.length > 0 && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      const { error } = await supabaseAdmin
+      const { error } = await getSupabaseAdmin()
         .from('audit_logs')
         .insert(accepted);
 
@@ -231,7 +237,7 @@ router.get('/stats', async (_req, res) => {
     // Last 24 hours summary
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
-    const { data: rows, error } = await supabaseAdmin
+    const { data: rows, error } = await getSupabaseAdmin()
       .from('audit_logs')
       .select('level, category, result')
       .gte('event_time', since);
