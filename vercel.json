@@ -17,6 +17,14 @@
     {
       "source": "/api/(.*)",
       "destination": "server/index.js"
+    },
+    {
+      "source": "/admin/audit-logs/(.*)",
+      "destination": "server/index.js"
+    },
+    {
+      "source": "/admin/audit-logs",
+      "destination": "server/index.js"
     }
   ],
   "headers": [
