@@ -277,7 +277,10 @@ Respond ONLY with valid JSON.`;
 
     // 📊 AUDIT: Log AI tender analysis (NIST AI RMF MEASURE)
     const tokensUsed = data.usage?.total_tokens || 0;
-    const cost = tokensUsed * 0.00000060; // gpt-4o-mini output pricing
+    const promptTokens = data.usage?.prompt_tokens || 0;
+    const completionTokens = data.usage?.completion_tokens || 0;
+    // gpt-4o-mini: $0.15/1M input + $0.60/1M output
+    const cost = (promptTokens * 0.00000015) + (completionTokens * 0.00000060);
     logAICall('gpt-4o-mini', tokensUsed, cost, {
       operation: 'tender-analysis',
       durationMs: Date.now() - analysisStart,
@@ -414,7 +417,10 @@ Respond ONLY with valid JSON, no other text.`;
 
     // 📊 AUDIT: Log AI match analysis (NIST AI RMF MEASURE)
     const tokensUsed = data.usage?.total_tokens || 0;
-    const cost = tokensUsed * 0.00000060;
+    const promptTokens = data.usage?.prompt_tokens || 0;
+    const completionTokens = data.usage?.completion_tokens || 0;
+    // gpt-4o-mini: $0.15/1M input + $0.60/1M output
+    const cost = (promptTokens * 0.00000015) + (completionTokens * 0.00000060);
     logAICall('gpt-4o-mini', tokensUsed, cost, {
       operation: 'match-analysis',
       durationMs: Date.now() - matchStart,
@@ -596,7 +602,24 @@ Provide actionable insights about the opportunity landscape and strategic recomm
     }
 
     const data = await response.json();
-    return data.choices[0]?.message?.content || null;
+    const summary = data.choices[0]?.message?.content || null;
+
+    // 📊 AUDIT: Log portfolio summary AI call (previously untracked)
+    if (data.usage) {
+      const promptTokens = data.usage.prompt_tokens || 0;
+      const completionTokens = data.usage.completion_tokens || 0;
+      const tokensUsed = data.usage.total_tokens || 0;
+      // gpt-4o-mini: $0.15/1M input + $0.60/1M output
+      const cost = (promptTokens * 0.00000015) + (completionTokens * 0.00000060);
+      logAICall('gpt-4o-mini', tokensUsed, cost, {
+        operation: 'portfolio-summary',
+        tenderCount: matchedTenders.length,
+        topTenderCount: topTenders.length,
+        nistAIFunction: 'MEASURE'
+      });
+    }
+
+    return summary;
     
   } catch (error) {
     console.error('Error generating portfolio summary:', error);
