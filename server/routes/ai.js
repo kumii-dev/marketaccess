@@ -77,13 +77,17 @@ async function callOpenAI({ systemPrompt, userPrompt, maxTokens = 500, temperatu
   };
 }
 
-// ── Write AI cost to audit_logs (fire-and-forget) ────────────────
+// ── Write AI cost to audit_logs ───────────────────────────────────
+// Returns the error (if any) so callers can await and log it.
 async function logAIToAudit({ operation, tokensUsed, promptTokens, completionTokens, durationMs, requestId, userEmail }) {
   const db = getSupabaseAdmin();
-  if (!db) return;
+  if (!db) {
+    console.warn('⚠️ [ai.js] logAIToAudit: Supabase admin client not available — check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY env vars');
+    return;
+  }
   // gpt-4o-mini: $0.15/1M input + $0.60/1M output
   const cost = (promptTokens * 0.00000015) + (completionTokens * 0.00000060);
-  await db.from('audit_logs').insert({
+  const { error } = await db.from('audit_logs').insert({
     event_time:    new Date().toISOString(),
     session_id:    requestId,
     user_email:    userEmail || null,
@@ -108,7 +112,12 @@ async function logAIToAudit({ operation, tokensUsed, promptTokens, completionTok
       source:         'server/routes/ai.js'
     },
     sensitive_data: false
-  }).catch(e => console.warn('⚠️ [ai.js] Failed to log AI cost:', e.message));
+  });
+  if (error) {
+    console.error('❌ [ai.js] logAIToAudit INSERT failed:', JSON.stringify(error));
+  } else {
+    console.log(`✅ [ai.js] Logged AI operation: ${operation} (${tokensUsed} tokens, $${cost.toFixed(7)})`);
+  }
 }
 
 /**
@@ -164,8 +173,8 @@ Rules:
       console.warn('⚠️ [ai.js/extract-keywords] GPT did not return valid JSON');
     }
 
-    // Log to audit_logs
-    logAIToAudit({
+    // Log to audit_logs — awaited so Vercel doesn't exit before the write completes
+    await logAIToAudit({
       operation: 'keyword-extraction',
       tokensUsed: ai.usage.total_tokens,
       promptTokens: ai.usage.prompt_tokens,
@@ -245,8 +254,8 @@ Return JSON:
       console.warn('⚠️ [ai.js/analyze-tender] GPT did not return valid JSON');
     }
 
-    // Log to audit_logs
-    logAIToAudit({
+    // Log to audit_logs — awaited so Vercel doesn't exit before the write completes
+    await logAIToAudit({
       operation: 'tender-analysis',
       tokensUsed: ai.usage.total_tokens,
       promptTokens: ai.usage.prompt_tokens,
@@ -328,8 +337,8 @@ router.post('/batch-analyze', batchOperationLimiter, async (req, res) => {
       }
     }
 
-    // Log total batch cost to audit_logs
-    logAIToAudit({
+    // Log total batch cost to audit_logs — awaited so Vercel doesn't exit before the write completes
+    await logAIToAudit({
       operation: 'batch-analysis',
       tokensUsed: totalTokens,
       promptTokens: totalPromptTokens,
@@ -396,8 +405,8 @@ Focus on actionable insights about the opportunity landscape and what they shoul
       temperature: 0.7,
     });
 
-    // Log to audit_logs with service_role key
-    logAIToAudit({
+    // Log to audit_logs with service_role key — awaited so Vercel doesn't exit before the write completes
+    await logAIToAudit({
       operation: 'portfolio-summary',
       tokensUsed: ai.usage.total_tokens,
       promptTokens: ai.usage.prompt_tokens,
