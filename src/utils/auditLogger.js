@@ -15,7 +15,8 @@
  * - Compliance Events (rate limits, policy violations)
  */
 
-import { supabase } from '../lib/supabase';
+// Dedicated audit database client (separate Supabase project — DB 2)
+import { supabaseAudit as supabase } from '../lib/supabaseAudit';
 
 /**
  * Audit Log Levels (ISO 27001 severity classification)
@@ -81,7 +82,8 @@ export const ComplianceFramework = {
  */
 class AuditLogger {
   constructor() {
-    this.endpoint = 'https://kumii.africa/admin/audit-logs';
+    // ✅ Correct endpoint: Vercel backend receiver (NOT the Lovable dashboard URL)
+    this.endpoint = 'https://marketaccess.vercel.app/admin/audit-logs';
     this.batchQueue = [];
     this.batchSize = 10;
     this.batchInterval = 5000; // 5 seconds
@@ -177,13 +179,17 @@ class AuditLogger {
     // Add to batch queue
     this.batchQueue.push(logEntry);
     
-    // Send immediately for critical events
+    // Send immediately for critical/high events; flush after batchSize for others
     if (level === AuditLogLevel.CRITICAL || level === AuditLogLevel.HIGH) {
       await this.flushBatch();
+    } else if (this.batchQueue.length >= this.batchSize) {
+      // Fire-and-forget when batch is full
+      this.flushBatch().catch(() => {});
     }
 
-    // Also store in Supabase for redundancy
-    await this.storeInSupabase(logEntry);
+    // NOTE: Direct Supabase write removed — anon key cannot INSERT (service_role only).
+    // The flushBatch() HTTP POST to the Vercel backend is the authoritative write path.
+    // The backend uses the service_role key to bypass RLS.
 
     return logEntry;
   }
@@ -284,8 +290,9 @@ class AuditLogger {
    * Start batch processor (sends logs every 5 seconds)
    */
   startBatchProcessor() {
+    // Flush every 5s if there's anything in the queue (not just when full)
     setInterval(() => {
-      if (this.batchQueue.length >= this.batchSize) {
+      if (this.batchQueue.length > 0) {
         this.flushBatch();
       }
     }, this.batchInterval);

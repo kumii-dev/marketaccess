@@ -354,6 +354,73 @@ router.post('/batch-analyze', batchOperationLimiter, async (req, res) => {
 });
 
 /**
+ * POST /api/ai/portfolio-summary
+ * Generate a strategic portfolio summary for a user's matched tenders.
+ *
+ * Rate Limit: shared general AI limiter (120/hour)
+ * Cost: ~$0.0003 per call
+ */
+router.post('/portfolio-summary', async (req, res) => {
+  const requestId = `psummary-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    const { topTenders, totalCount, profile, userEmail } = req.body;
+
+    if (!topTenders || !Array.isArray(topTenders) || topTenders.length === 0) {
+      return res.status(400).json({ error: 'Invalid input', message: 'topTenders array is required' });
+    }
+
+    const industry  = profile?.industry  || 'Not specified';
+    const location  = profile?.location  || 'Not specified';
+    const skills    = (profile?.skills   || []).join(', ') || 'Not specified';
+    const interests = (profile?.interests || []).join(', ') || 'Not specified';
+
+    const tenderList = topTenders
+      .map((t, i) => `${i + 1}. ${t.title} (${t.score}% match) — ${t.category}`)
+      .join('\n');
+
+    const ai = await callOpenAI({
+      systemPrompt: 'You are a concise South African business strategy advisor. Provide brief, actionable insights in 2-3 sentences.',
+      userPrompt: `Give a strategic summary for this company's tender opportunities:
+
+Company: ${industry} in ${location}
+Skills: ${skills}
+Interests: ${interests}
+
+Top Tender Matches:
+${tenderList}
+
+Total Opportunities Found: ${totalCount || topTenders.length}
+
+Focus on actionable insights about the opportunity landscape and what they should prioritise.`,
+      maxTokens: 200,
+      temperature: 0.7,
+    });
+
+    // Log to audit_logs with service_role key
+    logAIToAudit({
+      operation: 'portfolio-summary',
+      tokensUsed: ai.usage.total_tokens,
+      promptTokens: ai.usage.prompt_tokens,
+      completionTokens: ai.usage.completion_tokens,
+      durationMs: ai.durationMs,
+      requestId,
+      userEmail: userEmail || null,
+    });
+
+    return res.json({
+      summary: ai.content.trim() || null,
+      model: ai.model,
+      tokensUsed: ai.usage.total_tokens,
+      durationMs: ai.durationMs,
+    });
+
+  } catch (error) {
+    console.error('❌ [ai.js/portfolio-summary]', error.message);
+    res.status(500).json({ error: 'Portfolio summary failed', message: error.message });
+  }
+});
+
+/**
  * GET /api/ai/usage-stats
  * Get AI usage statistics for current user
  * No rate limiting (read-only)
