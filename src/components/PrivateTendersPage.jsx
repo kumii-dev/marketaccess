@@ -9,6 +9,8 @@ import {
   deletePrivateTender,
   syncLocalStorageToSupabase 
 } from '../lib/supabase';
+import auditLogger, { AuditEventCategory, AuditLogLevel } from '../utils/auditLogger';
+import { logSystemError } from '../utils/auditLogger';
 import './PrivateTendersPage.css';
 
 const PrivateTendersPage = () => {
@@ -30,6 +32,16 @@ const PrivateTendersPage = () => {
 
   // Load private tenders from Supabase on mount
   useEffect(() => {
+    // Log page view on mount (ISO 27001 A.12.4.1)
+    auditLogger.createLogEntry({
+      category: AuditEventCategory.USER_ACTIVITY,
+      level: AuditLogLevel.INFO,
+      action: 'View Private Tenders',
+      resource: 'Private Tenders Page',
+      result: 'SUCCESS',
+      frameworks: ['ISO27001', 'NIST_800_53'],
+      metadata: { iso27001Control: 'A.12.4.1', nistControl: 'AU-2' }
+    }).catch(() => {});
     loadTenders();
   }, []);
 
@@ -54,11 +66,27 @@ const PrivateTendersPage = () => {
       const tenders = await fetchPrivateTenders();
       setPrivateTenders(tenders);
       
+      // Log successful data load (NIST AU-2, ISO 27001 A.12.4.1)
+      auditLogger.createLogEntry({
+        category: AuditEventCategory.DATA_ACCESS,
+        level: AuditLogLevel.INFO,
+        action: 'Load Private Tenders',
+        resource: 'Supabase: private_tenders',
+        result: 'SUCCESS',
+        frameworks: ['ISO27001', 'NIST_800_53'],
+        metadata: {
+          recordCount: tenders.length,
+          iso27001Control: 'A.12.4.1',
+          nistControl: 'AU-2'
+        }
+      }).catch(() => {});
+      
       // Keep localStorage as backup
       localStorage.setItem('privateTenders', JSON.stringify(tenders));
     } catch (err) {
       console.error('Error loading tenders:', err);
       setError('Failed to load tenders. Please check your internet connection.');
+      logSystemError(err, 'PrivateTendersPage.loadTenders', 'MEDIUM', {});
       
       // Fallback to localStorage if Supabase fails
       const saved = localStorage.getItem('privateTenders');
@@ -88,6 +116,21 @@ const PrivateTendersPage = () => {
       
       // Update localStorage backup
       localStorage.setItem('privateTenders', JSON.stringify(updatedTenders));
+      
+      // Log tender add action (ISO 27001 A.12.4.1)
+      auditLogger.createLogEntry({
+        category: AuditEventCategory.DATA_MODIFICATION,
+        level: AuditLogLevel.INFO,
+        action: 'Add Private Tender',
+        resource: `Tender: ${createdTender.ocid || 'new'}`,
+        result: 'SUCCESS',
+        frameworks: ['ISO27001'],
+        metadata: {
+          tenderId: createdTender.ocid,
+          tenderTitle: createdTender.tender?.title,
+          iso27001Control: 'A.12.4.1'
+        }
+      }).catch(() => {});
       
       setCurrentPage(1);
       
@@ -122,6 +165,17 @@ const PrivateTendersPage = () => {
       
       // Update localStorage backup
       localStorage.setItem('privateTenders', JSON.stringify(updatedTenders));
+      
+      // Log tender delete action (ISO 27001 A.12.4.1)
+      auditLogger.createLogEntry({
+        category: AuditEventCategory.DATA_MODIFICATION,
+        level: AuditLogLevel.INFO,
+        action: 'Delete Private Tender',
+        resource: `Tender: ${ocid}`,
+        result: 'SUCCESS',
+        frameworks: ['ISO27001'],
+        metadata: { tenderId: ocid, iso27001Control: 'A.12.4.1' }
+      }).catch(() => {});
       
       console.log('Tender deleted successfully from Supabase');
     } catch (err) {

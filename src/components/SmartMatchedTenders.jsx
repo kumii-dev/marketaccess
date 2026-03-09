@@ -22,6 +22,8 @@ import {
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
+import auditLogger, { AuditEventCategory, AuditLogLevel } from '../utils/auditLogger';
+import { logSystemError } from '../utils/auditLogger';
 import './SmartMatchedTenders.css';
 
 const SmartMatchedTenders = () => {
@@ -106,6 +108,22 @@ const SmartMatchedTenders = () => {
         const profile = await profileResponse.json();
         console.log('Profile data received:', profile);
         setProfileData(profile);
+
+        // Log profile load (GDPR/POPIA PII access, ISO 27001 A.12.4.1)
+        auditLogger.createLogEntry({
+          category: AuditEventCategory.DATA_ACCESS,
+          level: AuditLogLevel.INFO,
+          action: 'Load User Profile',
+          resource: 'Kumii Profile API',
+          result: 'SUCCESS',
+          frameworks: ['ISO27001', 'GDPR', 'POPIA'],
+          metadata: {
+            userId: profile?.profile?.user_id || profile?.user_id,
+            iso27001Control: 'A.12.4.1',
+            gdprArticle: 'Article 30',
+            nistControl: 'AU-2'
+          }
+        }).catch(() => {});
 
         // Date range setup
         const today = new Date();
@@ -371,6 +389,7 @@ const SmartMatchedTenders = () => {
       } catch (err) {
         console.error('Error fetching data:', err);
         setError(err.message || 'Failed to load matched tenders');
+        logSystemError(err, 'SmartMatchedTenders.fetchProfileAndTenders', 'MEDIUM', {});
         setLoading(false);
         setIsLoadingMore(false);
       }
@@ -428,6 +447,21 @@ const SmartMatchedTenders = () => {
     try {
       setAiLoading(true);
       console.log('🤖 Starting AI enhancement with keyword-based analysis...');
+
+      // Log AI matching trigger (NIST AI RMF GOVERN, ISO 27001 A.12.4.1)
+      auditLogger.createLogEntry({
+        category: AuditEventCategory.AI_OPERATION,
+        level: AuditLogLevel.INFO,
+        action: 'Trigger AI Matching',
+        resource: 'Smart Matched Tenders — AI Enhancement',
+        result: 'SUCCESS',
+        frameworks: ['ISO27001', 'NIST_AI_RMF'],
+        metadata: {
+          tenderCount: tenders.length,
+          nistAIFunction: 'GOVERN',
+          iso27001Control: 'A.12.1.3'
+        }
+      }).catch(() => {});
 
       // Step 1: Collect ALL available data from 4 levels for richer insights
       console.log('📊 Collecting comprehensive profile data from all sources...');
@@ -864,6 +898,28 @@ const SmartMatchedTenders = () => {
     });
 
     setFilteredTenders(result);
+
+    // Log filter/search usage (ISO 27001 A.12.4.1, NIST AU-2)
+    const activeFilters = Object.entries(filters).filter(([k, v]) =>
+      v !== '' && v !== 0 && v !== 'score-desc' && k !== 'sortBy'
+    );
+    if (activeFilters.length > 0) {
+      auditLogger.createLogEntry({
+        category: AuditEventCategory.USER_ACTIVITY,
+        level: AuditLogLevel.INFO,
+        action: 'Filter Smart Tenders',
+        resource: 'Smart Matched Tenders',
+        result: 'SUCCESS',
+        frameworks: ['ISO27001', 'NIST_800_53'],
+        metadata: {
+          filters,
+          resultCount: result.length,
+          totalMatched: matchedTenders.length,
+          iso27001Control: 'A.12.4.1',
+          nistControl: 'AU-2'
+        }
+      }).catch(() => {});
+    }
   }, [matchedTenders, filters, allTenders]);
 
   // Smart matching algorithm
