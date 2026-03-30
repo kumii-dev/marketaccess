@@ -17,7 +17,14 @@ Only add:
 2. A new route entry: `/admin/audit-logs` → `AdminAuditLogs`
 3. Any new sub-components scoped to this page only (e.g. `src/components/audit/...`)
 
-The page reads live data from **Supabase** using the project's existing Supabase client and credentials.
+The page reads live data from another **Supabase** from the **the https://marketaccess.vercel.app/ Supabase project** already connected to this Lovable project via the iframe, using the following Supabase client and credentials:
+VITE_API_BASE_URL=https://marketaccess.vercel.app/
+VITE_SUPABASE_URL=https://njcancswtqnxihxavshl.supabase.co
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qY2FuY3N3dHFueGloeGF2c2hsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAzNzg4MTUsImV4cCI6MjA4NTk1NDgxNX0.D7aA-FXLKQXz-8uSlGGextYNBgxSd5jgYqoMDoly7s0
+
+
+SUPABASE_URL=https://njcancswtqnxihxavshl.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5qY2FuY3N3dHFueGloeGF2c2hsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MDM3ODgxNSwiZXhwIjoyMDg1OTU0ODE1fQ.Ymhnw36OnhcgpDaYLYBv401lK85rGSbb2WiE3iuziEc
 
 ---
 
@@ -40,7 +47,7 @@ If there is no active session, redirect to the platform's existing sign-in page.
 
 ## 🗄️ SUPABASE — TABLE & VIEWS
 
-All data comes from the **existing Supabase project** already connected to this Lovable project.
+All audit log data comes from the **the https://marketaccess.vercel.app/ Supabase project** already connected to this Lovable project via the iframe.
 
 ### Table: `public.audit_logs`
 ```sql
@@ -304,3 +311,4 @@ session_id, correlation_id, metadata
 - [ ] No service_role key in any frontend code
 - [ ] No console errors in production build
 - [ ] Page inherits platform's existing nav/header/footer unchanged
+- [ ] All audit log data comes from the **the https://marketaccess.vercel.app/ Supabase project** already connected to this Lovable project via the iframe.
