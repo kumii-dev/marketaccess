@@ -307,7 +307,7 @@
   }
   
   .tender-title {
-    font-size: 1.1rem;
+    font-size: 1rem;
   }
   
   .tender-info-row {
@@ -317,5 +317,47 @@
   
   .info-value {
     text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .tender-card {
+    padding: 0.875rem;
+  }
+
+  .tender-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .tender-category-badge {
+    white-space: normal;
+    word-break: break-word;
+  }
+
+  .tender-badge-row {
+    gap: 0.35rem;
+  }
+
+  .tender-badge,
+  .tender-category-badge,
+  .tender-ocid {
+    font-size: 0.7rem;
+  }
+
+  .view-details-btn,
+  .apply-button {
+    font-size: 0.875rem;
+    padding: 0.65rem 1rem;
+  }
+
+  .document-actions {
+    flex-direction: column;
+  }
+
+  .documents-toggle {
+    width: 100%;
+    justify-content: center;
   }
 }

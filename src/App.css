@@ -17,8 +17,9 @@
 
 .app-title {
   margin: 0;
-  font-size: 3rem;
+  font-size: 3.5rem;
   font-weight: 700;
+  line-height: 1.1;
   text-align: center;
   background: #9DB17E;
   background: linear-gradient(90deg, rgba(157, 177, 126, 1) 0%, rgba(195, 221, 148, 1) 50%, rgba(157, 177, 126, 1) 100%);
@@ -143,18 +144,22 @@
 /* Responsive design */
 @media (max-width: 768px) {
   .app {
-    margin-left: 70px; /* Smaller sidebar on mobile */
+    margin-left: 0; /* No sidebar on mobile */
   }
-  
+
   .app-header {
     padding: 2rem 0 1.5rem 0;
   }
-  
+
   .app-title {
     font-size: 2rem;
-    
   }
-  
+
+  .app-description {
+    font-size: 1rem;
+    padding: 0 0.5rem;
+  }
+
   .app-subtitle {
     font-size: 0.95rem;
     padding: 0 1rem;
@@ -169,12 +174,12 @@
     width: 100%;
     justify-content: center;
   }
-  
+
   .tender-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
   }
-  
+
   .app-main {
     padding: 1rem 0;
   }
@@ -182,15 +187,28 @@
 
 @media (max-width: 480px) {
   .container {
-    padding: 0 1rem;
+    padding: 0 0.75rem;
   }
-  
+
   .app-title {
-    font-size: 1.75rem;
+    font-size: 1.6rem;
+  }
+
+  .app-description {
+    font-size: 0.9rem;
   }
 
   .app-subtitle {
-    font-size: 0.9rem;
+    font-size: 0.875rem;
+  }
+
+  .app-header {
+    padding: 1.5rem 0 1rem 0;
+  }
+
+  .header-btn {
+    padding: 0.75rem 1rem;
+    font-size: 0.875rem;
   }
 }
 

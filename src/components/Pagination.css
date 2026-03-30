@@ -75,6 +75,7 @@
 @media (max-width: 768px) {
   .pagination {
     flex-wrap: wrap;
+    gap: 0.35rem;
   }
   
   .pagination-button {
@@ -86,5 +87,36 @@
     min-width: 35px;
     height: 35px;
     font-size: 0.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .pagination {
+    gap: 0.25rem;
+    padding: 1rem 0;
+  }
+
+  .pagination-numbers {
+    overflow-x: auto;
+    max-width: calc(100vw - 8rem);
+    padding-bottom: 0.25rem;
+    /* hide scrollbar visually but keep functional */
+    scrollbar-width: none;
+  }
+
+  .pagination-numbers::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pagination-button {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.8rem;
+  }
+
+  .pagination-number {
+    min-width: 32px;
+    height: 32px;
+    font-size: 0.8rem;
+    flex-shrink: 0;
   }
 }

@@ -206,7 +206,7 @@
 /* Responsive design */
 @media (max-width: 768px) {
   .filter-bar {
-    padding: 1.5rem 1rem;
+    padding: 1rem;
   }
   
   .filter-bar-header {
@@ -233,5 +233,38 @@
 
   .reset-button {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .filter-bar {
+    padding: 0.75rem;
+    border-radius: 8px;
+  }
+
+  .filter-bar-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .tender-count {
+    font-size: 0.85rem;
+  }
+
+  .filter-select,
+  .filter-input,
+  .date-input,
+  .search-input {
+    font-size: 0.875rem;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .date-range-section {
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 1rem;
+  }
+
+  .filters-grid {
+    gap: 0.75rem;
   }
 }

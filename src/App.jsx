@@ -653,9 +653,9 @@ function App() {
       /> */}
       <header className="app-header">
         <div className="container">
-          <h1 style={{fontSize: '4rem', fontWeight: 700, lineHeight: '1.1'}} className="app-title">Access To Market</h1>
+          <h1 className="app-title">Access To Market</h1>
 
-          <p style={{lineHeight: '1.5'}} className="app-description">
+          <p className="app-description">
             Connect with funders, corporates, and buyers through our trusted ecosystem
             powered by credit scoring, profiling, and intelligent matching.
           </p>
