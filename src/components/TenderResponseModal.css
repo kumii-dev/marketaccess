@@ -400,20 +400,20 @@
 }
 
 .trm-edit-toggle:hover {
-  border-color: #6f42c1;
-  color: #6f42c1;
+  border-color: #16a34a;
+  color: #16a34a;
 }
 
 .trm-edit-toggle--active {
-  background: #6f42c1;
-  border-color: #6f42c1;
+  background: #16a34a;
+  border-color: #16a34a;
   color: #fff;
 }
 
 /* Edit-mode meta chips */
 .trm-meta-chip--edit {
-  background: #ede9fe;
-  color: #6f42c1;
+  background: #dcfce7;
+  color: #16a34a;
 }
 
 .trm-meta-chip--dirty {
@@ -430,7 +430,7 @@
   line-height: 1.65;
   color: #1a1d23;
   background: #f9fafb;
-  border: 1.5px solid #c4b5fd;
+  border: 1.5px solid #86efac;
   border-radius: 8px;
   padding: 10px 12px;
   resize: vertical;
@@ -440,9 +440,9 @@
 }
 
 .trm-editable-textarea:focus {
-  border-color: #6f42c1;
+  border-color: #16a34a;
   background: #fff;
-  box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.12);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.12);
 }
 
 .trm-read-text {
