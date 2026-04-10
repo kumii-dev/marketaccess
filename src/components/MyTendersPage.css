@@ -1,0 +1,291 @@
+/* ── MyTendersPage ───────────────────────────────────────────────── */
+
+.mtp-page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+  min-height: 100vh;
+  font-family: inherit;
+}
+
+/* Header */
+.mtp-header {
+  margin-bottom: 24px;
+}
+
+.mtp-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a5568;
+  background: none;
+  border: none;
+  padding: 0 0 12px;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.mtp-back-btn:hover {
+  color: #1a202c;
+}
+
+.mtp-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1a1d23;
+  margin: 0 0 6px;
+}
+
+.mtp-subtitle {
+  font-size: 14px;
+  color: #64748b;
+  margin: 0;
+}
+
+/* Filter bar */
+.mtp-filter-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+
+.mtp-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 20px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.mtp-filter-btn:hover {
+  border-color: #6f42c1;
+  color: #6f42c1;
+}
+
+.mtp-filter-btn--active {
+  background: #6f42c1;
+  border-color: #6f42c1;
+  color: #fff;
+}
+
+.mtp-filter-count {
+  background: rgba(0,0,0,0.12);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.mtp-filter-btn--active .mtp-filter-count {
+  background: rgba(255,255,255,0.25);
+}
+
+/* Loading / error / empty */
+.mtp-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #64748b;
+  font-size: 15px;
+  padding: 60px 0;
+}
+
+.mtp-spinner {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  border: 3px solid #e2e8f0;
+  border-top-color: #6f42c1;
+  border-radius: 50%;
+  animation: mtp-spin 0.7s linear infinite;
+}
+
+@keyframes mtp-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mtp-error {
+  text-align: center;
+  padding: 40px 0;
+  color: #b71c1c;
+}
+
+.mtp-retry-btn {
+  margin-top: 10px;
+  padding: 8px 20px;
+  background: #6f42c1;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mtp-empty {
+  text-align: center;
+  padding: 64px 24px;
+}
+
+.mtp-empty-icon {
+  font-size: 48px;
+  display: block;
+  margin-bottom: 16px;
+}
+
+.mtp-empty-text {
+  font-size: 15px;
+  color: #64748b;
+  max-width: 400px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Grid */
+.mtp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* Card */
+.mtp-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
+.mtp-card:hover {
+  box-shadow: 0 4px 16px rgba(0,0,0,0.09);
+  transform: translateY(-2px);
+}
+
+.mtp-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mtp-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 12px;
+}
+
+.mtp-badge--draft {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.mtp-badge--progress {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.mtp-badge--submitted {
+  background: #e6f4ea;
+  color: #1e7e34;
+}
+
+.mtp-doc-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: #e8f0fe;
+  color: #1a56db;
+  font-weight: 500;
+}
+
+.mtp-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1a1d23;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.mtp-card-buyer,
+.mtp-card-date {
+  font-size: 12px;
+  color: #64748b;
+  margin: 0;
+}
+
+.mtp-card-excerpt {
+  font-size: 13px;
+  color: #374151;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.mtp-card-meta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin: 4px 0 0;
+}
+
+.mtp-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.mtp-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  text-align: center;
+}
+
+.mtp-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mtp-btn-primary {
+  background: #6f42c1;
+  color: #fff;
+}
+
+.mtp-btn-primary:hover:not(:disabled) {
+  background: #5a32a3;
+}
+
+.mtp-btn-danger {
+  background: #fdecea;
+  color: #b71c1c;
+  border: 1px solid #fca5a5;
+}
+
+.mtp-btn-danger:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+  .mtp-page { padding: 16px 12px 56px; }
+  .mtp-title { font-size: 22px; }
+  .mtp-grid { grid-template-columns: 1fr; }
+}

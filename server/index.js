@@ -11,6 +11,7 @@ import {
 import aiRoutes from './routes/ai.js';
 import auditRoutes from './routes/audit.js';
 import auditAIRoutes from './routes/auditAI.js';
+import tenderDocsRouter from './routes/tenderDocs.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -33,6 +34,9 @@ app.use('/api/ai', aiRoutes);
 
 // 🤖 AI AUDIT INTELLIGENCE: Threat summary, anomaly detection, compliance reports
 app.use('/api/ai/audit', auditAIRoutes);
+
+// 📄 TENDER DOCS: Server-side document fetch + text extraction
+app.use('/api/tenders', tenderDocsRouter);
 
 // 📊 AUDIT: Mount audit log receiver — ISO 27001, NIST SP 800-53, OWASP
 app.use('/admin/audit-logs', auditRoutes);

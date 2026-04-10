@@ -538,4 +538,142 @@ router.get('/rate-limit-info', (req, res) => {
   });
 });
 
+/**
+ * POST /api/ai/draft-tender-response
+ * Generate a structured draft tender response for a specific tender.
+ *
+ * Body: {
+ *   tender: { title, description, organOfState, closingDate, category, ocid, tenderRef },
+ *   documentText?: string,   // extracted from tender document (optional)
+ *   userProfile?: { bio, companyName, industry, skills, location, email },
+ *   userEmail?: string
+ * }
+ *
+ * Rate Limit: uses tenderAnalysisLimiter (30/hour)
+ * Cost: ~$0.003 per call
+ */
+router.post('/draft-tender-response', tenderAnalysisLimiter, async (req, res) => {
+  const requestId = `draft-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  try {
+    const { tender, documentText, userProfile, userEmail } = req.body || {};
+
+    if (!tender || !tender.title) {
+      return res.status(400).json({ error: 'tender.title is required' });
+    }
+
+    // ── Build context blocks ──────────────────────────────────────
+    const tenderBlock = `
+TENDER TITLE: ${tender.title}
+ORGAN OF STATE / BUYER: ${tender.organOfState || 'Not specified'}
+REFERENCE: ${tender.tenderRef || tender.ocid || 'N/A'}
+CATEGORY: ${tender.category || 'General'}
+CLOSING DATE: ${tender.closingDate || 'Not specified'}
+DESCRIPTION: ${(tender.description || 'No description provided.').substring(0, 1500)}`.trim();
+
+    const docBlock = documentText && documentText.length > 50
+      ? `\n\nTENDER DOCUMENT EXCERPT (${documentText.length} chars):\n${documentText.substring(0, 8000)}`
+      : '';
+
+    const profileBlock = userProfile
+      ? `\n\nAPPLICANT PROFILE:
+Company / Name: ${userProfile.companyName || userProfile.name || 'Not specified'}
+Industry: ${userProfile.industry || 'Not specified'}
+Skills & Services: ${Array.isArray(userProfile.skills) ? userProfile.skills.join(', ') : (userProfile.skills || 'Not specified')}
+Location: ${userProfile.location || 'South Africa'}
+Bio / Overview: ${(userProfile.bio || 'Not provided.').substring(0, 800)}`
+      : '\n\nAPPLICANT PROFILE: Not provided (use generic SA SME placeholder)';
+
+    const systemPrompt = `You are a professional tender response writer specialising in South African government procurement.
+Your drafts are thorough, compliant, professional, and tailored to the applicant's profile.
+
+MANDATORY COMPLIANCE RULES:
+- All tender responses must comply with the Public Finance Management Act (PFMA), PPPFA (Preferential Procurement Policy Framework Act), and BBBEE requirements.
+- Do NOT include any content that violates PRECCA (Prevention and Combating of Corrupt Activities Act) — no offers of inducements, kickbacks, or corrupt arrangements.
+- Responses must be factually grounded in the tender details provided.
+- Flag any gaps where the applicant profile does not meet tender requirements.
+
+OUTPUT FORMAT: Respond ONLY with a valid JSON object with this EXACT structure:
+{
+  "executiveSummary": "...",
+  "companyOverview": "...",
+  "technicalApproach": "...",
+  "teamCapability": "...",
+  "pricingNarrative": "...",
+  "complianceItems": [
+    { "item": "BBBEE Level Requirement", "status": "compliant|partial|gap", "note": "..." },
+    { "item": "Tax Clearance Certificate", "status": "compliant|partial|gap", "note": "..." },
+    { "item": "Company Registration (CIPC)", "status": "compliant|partial|gap", "note": "..." },
+    { "item": "CSD Registration", "status": "compliant|partial|gap", "note": "..." }
+  ],
+  "keyRequirements": ["requirement 1", "requirement 2"],
+  "riskFlags": ["flag 1 if any"],
+  "strengths": ["strength 1", "strength 2"]
+}`;
+
+    const userPrompt = `${tenderBlock}${docBlock}${profileBlock}
+
+Draft a professional tender response. All sections must be specific to this tender and applicant.
+For complianceItems, assess whether the applicant profile meets each standard SA government tender requirement.
+List at least 4 complianceItems. Return ONLY the JSON object.`;
+
+    const ai = await callOpenAI({
+      systemPrompt,
+      userPrompt,
+      maxTokens: 2000,
+      temperature: 0.4
+    });
+
+    // Parse JSON response
+    let draft;
+    try {
+      const raw = ai.content.trim();
+      const jsonStart = raw.indexOf('{');
+      const jsonEnd = raw.lastIndexOf('}');
+      if (jsonStart === -1 || jsonEnd === -1) throw new Error('No JSON object found in response');
+      draft = JSON.parse(raw.slice(jsonStart, jsonEnd + 1));
+    } catch (parseErr) {
+      console.error('[ai.js] draft-tender-response JSON parse error:', parseErr.message);
+      return res.status(502).json({
+        error: 'AI response parse error',
+        raw: ai.content.substring(0, 500),
+        message: 'The AI returned an unexpected format. Please try again.'
+      });
+    }
+
+    // Log AI usage
+    await logAIToAudit({
+      operation: 'draft-tender-response',
+      tokensUsed: ai.usage.total_tokens,
+      promptTokens: ai.usage.prompt_tokens,
+      completionTokens: ai.usage.completion_tokens,
+      durationMs: ai.durationMs,
+      requestId,
+      userEmail: userEmail || null
+    });
+
+    return res.json({
+      success: true,
+      draft,
+      meta: {
+        model: ai.model,
+        tokensUsed: ai.usage.total_tokens,
+        durationMs: ai.durationMs,
+        documentAnalyzed: !!(documentText && documentText.length > 50),
+        requestId
+      }
+    });
+
+  } catch (error) {
+    console.error(`[ai.js] draft-tender-response error [${requestId}]:`, error.message);
+    if (error.message?.includes('Rate limit')) {
+      return res.status(429).json({ error: 'Rate limit reached', message: error.message });
+    }
+    return res.status(500).json({
+      error: 'Failed to draft tender response',
+      message: error.message,
+      requestId
+    });
+  }
+});
+
 export default router;

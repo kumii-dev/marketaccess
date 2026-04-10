@@ -9,6 +9,7 @@ import Sidebar from './components/Sidebar';
 import PrivateTendersPage from './components/PrivateTendersPage';
 import SmartMatchedTenders from './components/SmartMatchedTenders';
 import TopNavbar from './components/TopNavbar';
+import MyTendersPage from './components/MyTendersPage';
 import { getCachedTenders, cacheTenders } from './utils/tenderCache';
 import { getTendersFromIDB, saveTendersToIDB } from './utils/tenderCacheDB';
 import { getTendersFromSupabase, saveTendersToSupabase, syncCacheFromSupabase } from './utils/supabaseCache';
@@ -643,6 +644,15 @@ function App() {
     );
   }
 
+  // Render My Tenders page if that section is selected
+  if (currentSection === 'my-tenders') {
+    return (
+      <div className="app">
+        <MyTendersPage onBack={() => handleSectionChange('government-tenders')} />
+      </div>
+    );
+  }
+
   // Default: Render Government Tenders page
   return (
     <div className="app">
@@ -665,6 +675,9 @@ function App() {
             </button>
             <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('smart-matched-tenders')}>
               Smart Matched Tenders
+            </button>
+            <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('my-tenders')}>
+              📝 My Tenders
             </button>
             <button style={{display:'none'}} className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
               Private Tenders

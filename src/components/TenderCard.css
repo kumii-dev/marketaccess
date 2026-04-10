@@ -361,3 +361,57 @@
     justify-content: center;
   }
 }
+
+/* ── Draft Tender Response button ─────────────────────────────── */
+.tender-draft-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 14px;
+  background: linear-gradient(135deg, #6f42c1, #7c3aed);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, transform 0.1s;
+}
+
+.tender-draft-btn:hover:not(:disabled) {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.tender-draft-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.tender-draft-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.tender-draft-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: tender-spin 0.65s linear infinite;
+}
+
+@keyframes tender-spin {
+  to { transform: rotate(360deg); }
+}
+
+.tender-draft-error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: #b71c1c;
+  text-align: center;
+}

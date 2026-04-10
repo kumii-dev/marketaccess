@@ -6,12 +6,20 @@ import {
   formatDate 
 } from '../lib/api';
 import TenderDetailsModal from './TenderDetailsModal';
+import TenderResponseModal from './TenderResponseModal';
 import { logTenderView } from '../utils/auditLogger';
 import './TenderCard.css';
 
-const TenderCard = ({ tender }) => {
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+const TenderCard = ({ tender, userProfile }) => {
   const [showDocuments, setShowDocuments] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState(null);
+  const [draftData, setDraftData] = useState(null);
+  const [draftMeta, setDraftMeta] = useState(null);
+  const [showDraftModal, setShowDraftModal] = useState(false);
   
   const title = getTenderTitle(tender);
   const description = getTenderDescription(tender);
@@ -89,6 +97,71 @@ const TenderCard = ({ tender }) => {
   };
 
   const hasDocuments = documents.length > 0;
+
+  // ── Draft Tender Response ─────────────────────────────────────
+  const handleDraftResponse = async () => {
+    setDrafting(true);
+    setDraftError(null);
+    setDraftData(null);
+    setDraftMeta(null);
+
+    try {
+      // Step 1: Try to fetch text from the best document (optional)
+      let documentText = '';
+      if (hasDocuments) {
+        try {
+          const docsPayload = documents.slice(0, 5).map(d => ({ url: d.url, title: d.title }));
+          const docRes = await fetch(`${API_BASE}/api/tenders/fetch-best-document`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ documents: docsPayload })
+          });
+          if (docRes.ok) {
+            const docData = await docRes.json();
+            documentText = docData.text || '';
+          }
+        } catch {
+          // Non-fatal — continue without document text
+        }
+      }
+
+      // Step 2: Call AI to draft the response
+      const tenderPayload = {
+        title,
+        description,
+        organOfState: buyer,
+        closingDate: endDate,
+        category,
+        ocid,
+        tenderRef: tender?.tender?.id || ocid
+      };
+
+      const aiRes = await fetch(`${API_BASE}/api/ai/draft-tender-response`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tender: tenderPayload,
+          documentText,
+          userProfile: userProfile || null,
+          userEmail: userProfile?.email || null
+        })
+      });
+
+      if (!aiRes.ok) {
+        const err = await aiRes.json().catch(() => ({}));
+        throw new Error(err.message || `Server error ${aiRes.status}`);
+      }
+
+      const result = await aiRes.json();
+      setDraftData(result.draft);
+      setDraftMeta(result.meta);
+      setShowDraftModal(true);
+    } catch (err) {
+      setDraftError(err.message || 'Failed to generate draft. Please try again.');
+    } finally {
+      setDrafting(false);
+    }
+  };
 
   return (
     <div className="tender-card">
@@ -229,6 +302,19 @@ const TenderCard = ({ tender }) => {
             No Documents Available
           </button>
         )}
+
+        {/* Draft Tender Response */}
+        <button
+          className="tender-draft-btn"
+          onClick={handleDraftResponse}
+          disabled={drafting}
+        >
+          {drafting
+            ? <><span className="tender-draft-spinner" />Drafting…</>
+            : <><i className="bi bi-pencil-square"></i>Draft Tender Response</>
+          }
+        </button>
+        {draftError && <p className="tender-draft-error">{draftError}</p>}
       </div>
       
       <TenderDetailsModal
@@ -236,6 +322,17 @@ const TenderCard = ({ tender }) => {
         onClose={() => setIsDetailsOpen(false)}
         tender={tender}
       />
+
+      {showDraftModal && draftData && (
+        <TenderResponseModal
+          tender={tender}
+          draft={draftData}
+          meta={draftMeta}
+          userProfile={userProfile}
+          onClose={() => setShowDraftModal(false)}
+          onSaved={() => {}}
+        />
+      )}
     </div>
   );
 };
