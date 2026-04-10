@@ -19,6 +19,7 @@ import {
   saveAIKeywordsToSupabase,
   syncCacheFromSupabase 
 } from '../utils/supabaseCache';
+import { supabase } from '../lib/supabase';
 import TenderCard from './TenderCard';
 import LoadingSpinner from './LoadingSpinner';
 import ErrorMessage from './ErrorMessage';
@@ -37,7 +38,7 @@ const SmartMatchedTenders = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [isWaitingForAuth, setIsWaitingForAuth] = useState(true);
-  const [matchingScore, setMatchingScore] = useState({});
+  const [_matchingScore, setMatchingScore] = useState({});
   const [aiAnalysis, setAiAnalysis] = useState(new Map());
   const [aiSummary, setAiSummary] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
@@ -54,28 +55,57 @@ const SmartMatchedTenders = () => {
     sortBy: 'score-desc'
   });
 
-  // Listen for KUMII_AUTH_TOKEN from parent window
+  // ── Auth bootstrap ─────────────────────────────────────────────
+  // Path A: Running stand-alone inside the React app — grab the Supabase
+  //         session token directly (no parent iframe needed).
+  // Path B: Running embedded inside the kumii.africa iframe — listen for
+  //         the KUMII_AUTH_TOKEN postMessage as a fallback.
   useEffect(() => {
+    let cancelled = false;
+
+    // Path A: try the local Supabase session first
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      if (session?.access_token) {
+        console.log('✅ SmartMatchedTenders: using local Supabase session token');
+        setAuthToken(session.access_token);
+        setIsWaitingForAuth(false);
+        return;
+      }
+      // No local session yet — fall through to postMessage (iframe mode)
+      console.log('ℹ️ No local Supabase session; waiting for KUMII_AUTH_TOKEN from parent');
+    });
+
+    // Also subscribe to future session changes (e.g. user logs in while page is open)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
+      if (session?.access_token) {
+        setAuthToken(session.access_token);
+        setIsWaitingForAuth(false);
+      }
+    });
+
+    // Path B: postMessage from parent iframe (kumii.africa)
     const handleMessage = (event) => {
-      // Security: In production, validate event.origin
       if (event.data && event.data.type === 'KUMII_AUTH_TOKEN') {
-        console.log('Received KUMII_AUTH_TOKEN from parent window');
+        console.log('✅ SmartMatchedTenders: received KUMII_AUTH_TOKEN from parent window');
         const token = event.data.token;
-        if (token) {
+        if (token && !cancelled) {
           setAuthToken(token);
           setIsWaitingForAuth(false);
         }
       }
     };
-
     window.addEventListener('message', handleMessage);
 
-    // Request token from parent on mount
+    // Request token from parent only when actually embedded in an iframe
     if (window.parent !== window.self) {
       window.parent.postMessage({ type: 'REQUEST_AUTH_TOKEN' }, '*');
     }
 
     return () => {
+      cancelled = true;
+      subscription.unsubscribe();
       window.removeEventListener('message', handleMessage);
     };
   }, []);
@@ -400,7 +430,7 @@ const SmartMatchedTenders = () => {
   }, [authToken]); // matchTendersToProfile is stable and doesn't need to be in deps
   
   // Background fetch function for stale-while-revalidate pattern
-  const fetchFreshDataInBackground = async (dateFrom, dateTo, profile) => {
+  const fetchFreshDataInBackground = async (dateFrom, dateTo) => {
     try {
       console.log('🔄 Background refresh: Fetching latest tenders...');
       
