@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import './TenderResponseModal.css';
 
@@ -200,7 +201,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
   const hasRiskFlags = Array.isArray(draft.riskFlags) && draft.riskFlags.length > 0;
   const isExisting   = !!rowId; // opened from My Tenders (has a saved row)
 
-  return (
+  return createPortal(
     <div className="trm-overlay" role="dialog" aria-modal="true" aria-label="Draft Tender Response">
       <div className="trm-modal">
         {/* Header */}
@@ -373,6 +374,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
         </div>
         {saveError && <p className="trm-save-error">{saveError}</p>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
