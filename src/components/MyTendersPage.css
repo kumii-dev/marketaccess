@@ -138,8 +138,8 @@
 }
 
 .mtp-empty-icon {
-  font-size: 48px;
-  display: block;
+  display: flex;
+  justify-content: center;
   margin-bottom: 16px;
 }
 

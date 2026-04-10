@@ -677,7 +677,7 @@ function App() {
               Smart Matched Tenders
             </button>
             <button className="header-btn header-btn-secondary" onClick={() => handleSectionChange('my-tenders')}>
-              📝 My Tenders
+              <i className="bi bi-folder2-open"></i> My Tenders
             </button>
             <button style={{display:'none'}} className="header-btn header-btn-secondary" onClick={() => handleSectionChange('private-tenders')}>
               Private Tenders

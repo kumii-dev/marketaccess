@@ -102,7 +102,7 @@ export default function MyTendersPage({ onBack }) {
         <button className="mtp-back-btn" onClick={onBack}>
           <i className="bi bi-arrow-left"></i> Back
         </button>
-        <h1 className="mtp-title">📝 My Tender Drafts</h1>
+        <h1 className="mtp-title">My Tender Drafts</h1>
         <p className="mtp-subtitle">Your saved AI-drafted tender responses</p>
       </div>
 
@@ -133,14 +133,14 @@ export default function MyTendersPage({ onBack }) {
 
       {error && (
         <div className="mtp-error">
-          <p>⚠️ {error}</p>
+          <p><i className="bi bi-exclamation-triangle-fill"></i> {error}</p>
           <button className="mtp-retry-btn" onClick={load}>Retry</button>
         </div>
       )}
 
       {!loading && !error && filtered.length === 0 && (
         <div className="mtp-empty">
-          <span className="mtp-empty-icon">📄</span>
+          <span className="mtp-empty-icon"><i className="bi bi-file-earmark-text" style={{ fontSize: '48px', color: '#94a3b8' }}></i></span>
           <p className="mtp-empty-text">
             {filter === 'all'
               ? 'No saved drafts yet. Click "Draft Tender Response" on any tender to get started.'
@@ -156,18 +156,18 @@ export default function MyTendersPage({ onBack }) {
               <div className="mtp-card-header">
                 <StatusBadge status={row.status} />
                 {row.document_analyzed && (
-                  <span className="mtp-doc-badge">📄 Doc Analysed</span>
+                  <span className="mtp-doc-badge">Doc Analysed</span>
                 )}
               </div>
 
               <h3 className="mtp-card-title">{row.tender_title}</h3>
 
               {row.organ_of_state && (
-                <p className="mtp-card-buyer">🏛 {row.organ_of_state}</p>
+                <p className="mtp-card-buyer">{row.organ_of_state}</p>
               )}
 
               {row.closing_date && (
-                <p className="mtp-card-date">📅 Closing: {row.closing_date.split('T')[0]}</p>
+                <p className="mtp-card-date">Closing: {row.closing_date.split('T')[0]}</p>
               )}
 
               {row.executive_summary && (

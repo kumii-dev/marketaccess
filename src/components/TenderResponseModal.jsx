@@ -8,9 +8,9 @@ function CollapsibleSection({ title, icon, children, defaultOpen = true }) {
   return (
     <div className={`trm-section${open ? ' trm-section--open' : ''}`}>
       <button className="trm-section-header" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="trm-section-icon">{icon}</span>
+        <span className="trm-section-icon"><i className={`bi ${icon}`}></i></span>
         <span className="trm-section-title">{title}</span>
-        <span className="trm-section-chevron">{open ? '▲' : '▼'}</span>
+        <span className="trm-section-chevron"><i className={`bi bi-chevron-${open ? 'up' : 'down'}`}></i></span>
       </button>
       {open && <div className="trm-section-body">{children}</div>}
     </div>
@@ -206,7 +206,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
         {/* Header */}
         <div className="trm-header">
           <div className="trm-header-left">
-            <span className="trm-header-icon">{editMode ? '✏️' : '✍'}</span>
+            <span className="trm-header-icon"><i className={`bi ${editMode ? 'bi-pencil' : 'bi-file-earmark-text'}`}></i></span>
             <div>
               <h2 className="trm-title">
                 {isExisting ? (editMode ? 'Editing Draft' : 'Tender Response Draft') : 'Draft Tender Response'}
@@ -221,26 +221,28 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
               onClick={() => { setEditMode(e => !e); setSaved(false); }}
               title={editMode ? 'Switch to view mode' : 'Edit draft content'}
             >
-              {editMode ? '👁 View' : '✏️ Edit'}
+              {editMode
+                ? <><i className="bi bi-eye"></i> View</>
+                : <><i className="bi bi-pencil"></i> Edit</>}
             </button>
-            <button className="trm-close-btn" onClick={onClose} aria-label="Close">✕</button>
+            <button className="trm-close-btn" onClick={onClose} aria-label="Close"><i className="bi bi-x-lg"></i></button>
           </div>
         </div>
 
         {/* Meta strip */}
         <div className="trm-meta-strip">
-          {buyer && <span className="trm-meta-chip">🏛 {buyer}</span>}
-          {closingDate && <span className="trm-meta-chip">📅 {closingDate.split('T')[0]}</span>}
-          {meta?.documentAnalyzed && <span className="trm-meta-chip trm-meta-chip--green">📄 Doc Analysed</span>}
-          {meta?.tokensUsed && <span className="trm-meta-chip">🔢 {meta.tokensUsed} tokens</span>}
-          {editMode && <span className="trm-meta-chip trm-meta-chip--edit">✏️ Editing</span>}
+          {buyer && <span className="trm-meta-chip"><i className="bi bi-bank"></i> {buyer}</span>}
+          {closingDate && <span className="trm-meta-chip"><i className="bi bi-calendar3"></i> {closingDate.split('T')[0]}</span>}
+          {meta?.documentAnalyzed && <span className="trm-meta-chip trm-meta-chip--green"><i className="bi bi-file-earmark-check"></i> Doc Analysed</span>}
+          {meta?.tokensUsed && <span className="trm-meta-chip"><i className="bi bi-cpu"></i> {meta.tokensUsed} tokens</span>}
+          {editMode && <span className="trm-meta-chip trm-meta-chip--edit"><i className="bi bi-pencil"></i> Editing</span>}
           {dirty && !saved && <span className="trm-meta-chip trm-meta-chip--dirty">● Unsaved changes</span>}
         </div>
 
         {/* Risk flags */}
         {hasRiskFlags && (
           <div className="trm-risk-banner">
-            <span className="trm-risk-icon">⚠️</span>
+            <span className="trm-risk-icon"><i className="bi bi-exclamation-triangle-fill"></i></span>
             <div>
               <strong>Risk Flags</strong>
               <ul className="trm-risk-list">
@@ -252,7 +254,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
 
         {/* Body */}
         <div className="trm-body">
-          <CollapsibleSection title="Executive Summary" icon="📋">
+          <CollapsibleSection title="Executive Summary" icon="bi-file-text">
             <EditableText
               value={fields.executiveSummary}
               onChange={v => updateField('executiveSummary', v)}
@@ -262,7 +264,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
             />
           </CollapsibleSection>
 
-          <CollapsibleSection title="Company Overview" icon="🏢" defaultOpen={false}>
+          <CollapsibleSection title="Company Overview" icon="bi-building" defaultOpen={false}>
             <EditableText
               value={fields.companyOverview}
               onChange={v => updateField('companyOverview', v)}
@@ -272,7 +274,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
             />
           </CollapsibleSection>
 
-          <CollapsibleSection title="Technical Approach" icon="🔧" defaultOpen={false}>
+          <CollapsibleSection title="Technical Approach" icon="bi-tools" defaultOpen={false}>
             <EditableText
               value={fields.technicalApproach}
               onChange={v => updateField('technicalApproach', v)}
@@ -282,7 +284,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
             />
           </CollapsibleSection>
 
-          <CollapsibleSection title="Team & Capability" icon="👥" defaultOpen={false}>
+          <CollapsibleSection title="Team & Capability" icon="bi-people" defaultOpen={false}>
             <EditableText
               value={fields.teamCapability}
               onChange={v => updateField('teamCapability', v)}
@@ -292,7 +294,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
             />
           </CollapsibleSection>
 
-          <CollapsibleSection title="Pricing Narrative" icon="💰" defaultOpen={false}>
+          <CollapsibleSection title="Pricing Narrative" icon="bi-currency-dollar" defaultOpen={false}>
             <EditableText
               value={fields.pricingNarrative}
               onChange={v => updateField('pricingNarrative', v)}
@@ -303,7 +305,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
           </CollapsibleSection>
 
           {Array.isArray(draft.complianceItems) && draft.complianceItems.length > 0 && (
-            <CollapsibleSection title="Compliance Checklist" icon="✅" defaultOpen={false}>
+            <CollapsibleSection title="Compliance Checklist" icon="bi-clipboard-check" defaultOpen={false}>
               <ul className="trm-compliance-list">
                 {draft.complianceItems.map((item, i) => (
                   <li key={i} className="trm-compliance-item">
@@ -317,7 +319,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
           )}
 
           {Array.isArray(draft.keyRequirements) && draft.keyRequirements.length > 0 && (
-            <CollapsibleSection title="Key Requirements" icon="📌" defaultOpen={false}>
+            <CollapsibleSection title="Key Requirements" icon="bi-pin-angle" defaultOpen={false}>
               <ul className="trm-strengths-list">
                 {draft.keyRequirements.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
@@ -325,7 +327,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
           )}
 
           {Array.isArray(draft.strengths) && draft.strengths.length > 0 && (
-            <CollapsibleSection title="Strengths to Highlight" icon="⭐" defaultOpen={false}>
+            <CollapsibleSection title="Strengths to Highlight" icon="bi-star" defaultOpen={false}>
               <ul className="trm-strengths-list">
                 {draft.strengths.map((s, i) => <li key={i}>{s}</li>)}
               </ul>
@@ -350,14 +352,22 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
           </div>
           <div className="trm-footer-right">
             <button className="trm-btn trm-btn-ghost" onClick={handleCopyAll}>
-              {copied ? '✅ Copied!' : '📋 Copy All'}
+              {copied
+                ? <><i className="bi bi-clipboard-check"></i> Copied!</>
+                : <><i className="bi bi-clipboard"></i> Copy All</>}
             </button>
             <button
               className="trm-btn trm-btn-primary"
               onClick={handleSave}
               disabled={saving || (saved && !dirty)}
             >
-              {saving ? 'Saving…' : saved ? '✅ Saved!' : isExisting ? '💾 Save Changes' : '💾 Save Draft'}
+              {saving
+                ? <><i className="bi bi-hourglass-split"></i> Saving…</>
+                : saved
+                  ? <><i className="bi bi-check-circle"></i> Saved!</>
+                  : isExisting
+                    ? <><i className="bi bi-floppy"></i> Save Changes</>
+                    : <><i className="bi bi-floppy"></i> Save Draft</>}
             </button>
           </div>
         </div>
