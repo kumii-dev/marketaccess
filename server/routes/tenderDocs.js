@@ -11,8 +11,10 @@
 
 import express from 'express';
 import axios from 'axios';
-// pdf-parse v2 uses a class-based API — import the named export (no default in v2)
-import { PDFParse } from 'pdf-parse';
+// pdf-parse v1 — CJS module, import via createRequire for ESM compatibility
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdfParse = require('pdf-parse');
 import mammoth from 'mammoth';
 
 const router = express.Router();
@@ -67,11 +69,9 @@ function getExtension(url, contentType) {
 async function extractText(buffer, ext) {
   if (ext === 'pdf') {
     try {
-      // pdf-parse v2: class-based API — pass buffer as Uint8Array via pdfjs-dist options
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      const result = await parser.getText();
-      // getText() may return a string directly or an object with a .text property
-      return typeof result === 'string' ? result : (result?.text || '');
+      // pdf-parse v1: pdfParse(buffer) → { text, numpages, ... }
+      const data = await pdfParse(buffer);
+      return data.text || '';
     } catch (pdfErr) {
       console.warn('[tenderDocs] pdf-parse failed:', pdfErr.message);
       return '';
