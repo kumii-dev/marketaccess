@@ -181,7 +181,7 @@ export default function MyTendersPage({ onBack }) {
                 {row.tokens_used ? ` · ${row.tokens_used} tokens` : ''}
               </p>
 
-              <div className="mtp-card-actions">
+      <div className="mtp-card-actions">
                 <button
                   className="mtp-btn mtp-btn-primary"
                   onClick={() => setOpenDraft({ row })}
@@ -201,15 +201,17 @@ export default function MyTendersPage({ onBack }) {
         </div>
       )}
 
-      {/* Reopen modal */}
+      {/* Reopen modal — passes rowId + initialStatus for targeted UPDATE */}
       {openDraft && (
         <TenderResponseModal
           tender={rowToTender(openDraft.row)}
           draft={rowToDraft(openDraft.row)}
           meta={{ tokensUsed: openDraft.row.tokens_used, model: openDraft.row.model, documentAnalyzed: openDraft.row.document_analyzed }}
+          rowId={openDraft.row.id}
+          initialStatus={openDraft.row.status}
           userProfile={null}
           onClose={() => setOpenDraft(null)}
-          onSaved={() => { load(); setOpenDraft(null); }}
+          onSaved={() => { load(); }}
         />
       )}
     </div>

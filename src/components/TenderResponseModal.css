@@ -375,6 +375,84 @@
   text-align: center;
 }
 
+/* ── Edit / View toggle button ───────────────────────────────── */
+.trm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.trm-edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 20px;
+  border: 1.5px solid #d1d5db;
+  background: #fff;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.trm-edit-toggle:hover {
+  border-color: #6f42c1;
+  color: #6f42c1;
+}
+
+.trm-edit-toggle--active {
+  background: #6f42c1;
+  border-color: #6f42c1;
+  color: #fff;
+}
+
+/* Edit-mode meta chips */
+.trm-meta-chip--edit {
+  background: #ede9fe;
+  color: #6f42c1;
+}
+
+.trm-meta-chip--dirty {
+  background: #fff3e0;
+  color: #e65100;
+  font-weight: 600;
+}
+
+/* ── Editable textarea ───────────────────────────────────────── */
+.trm-editable-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #1a1d23;
+  background: #f9fafb;
+  border: 1.5px solid #c4b5fd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  resize: vertical;
+  outline: none;
+  font-family: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.trm-editable-textarea:focus {
+  border-color: #6f42c1;
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(111, 66, 193, 0.12);
+}
+
+.trm-read-text {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 14px;
+  line-height: 1.65;
+  color: #374151;
+}
+
 /* Mobile tweaks */
 @media (max-width: 480px) {
   .trm-header {

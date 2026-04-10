@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import './TenderResponseModal.css';
 
@@ -28,6 +28,22 @@ function ComplianceBadge({ status }) {
   return <span className={`trm-badge ${cls}`}>{label}</span>;
 }
 
+// ── Editable text field ───────────────────────────────────────────
+function EditableText({ value, onChange, editMode, rows = 5, placeholder = '' }) {
+  if (editMode) {
+    return (
+      <textarea
+        className="trm-editable-textarea"
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+      />
+    );
+  }
+  return <p className="trm-read-text">{value || '—'}</p>;
+}
+
 /**
  * TenderResponseModal
  *
@@ -37,15 +53,43 @@ function ComplianceBadge({ status }) {
  *                   pricingNarrative, complianceItems, keyRequirements, riskFlags, strengths }
  *   meta        — { tokensUsed, durationMs, documentAnalyzed, model }
  *   userProfile — { email, id, ... }
+ *   rowId       — existing Supabase row id (for updates from My Tenders page)
+ *   initialStatus — pre-fill status when opening a saved draft
  *   onClose     — () => void
  *   onSaved     — () => void
  */
-export default function TenderResponseModal({ tender, draft, meta, userProfile, onClose, onSaved }) {
-  const [status, setStatus] = useState('draft');
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+export default function TenderResponseModal({ tender, draft, meta, userProfile, rowId, initialStatus, onClose, onSaved }) {
+  // ── Editable content state (mirrors draft prop) ───────────────
+  const [fields, setFields] = useState({
+    executiveSummary:  draft?.executiveSummary  || '',
+    companyOverview:   draft?.companyOverview   || '',
+    technicalApproach: draft?.technicalApproach || '',
+    teamCapability:    draft?.teamCapability    || '',
+    pricingNarrative:  draft?.pricingNarrative  || '',
+  });
+  const [status, setStatus]   = useState(initialStatus || 'draft');
+  const [editMode, setEditMode] = useState(false);
+  const [dirty, setDirty]     = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [saved, setSaved]     = useState(false);
   const [saveError, setSaveError] = useState(null);
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied]   = useState(false);
+
+  // Reset when draft prop changes (re-opened with different tender)
+  useEffect(() => {
+    setFields({
+      executiveSummary:  draft?.executiveSummary  || '',
+      companyOverview:   draft?.companyOverview   || '',
+      technicalApproach: draft?.technicalApproach || '',
+      teamCapability:    draft?.teamCapability    || '',
+      pricingNarrative:  draft?.pricingNarrative  || '',
+    });
+    setStatus(initialStatus || 'draft');
+    setDirty(false);
+    setSaved(false);
+    setSaveError(null);
+    setEditMode(false);
+  }, [draft, initialStatus]);
 
   if (!draft) return null;
 
@@ -57,7 +101,13 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
   const category    = tender?.tender?.mainProcurementCategory || tender?.category || '';
   const tenderRef   = tender?.tender?.id || tender?.tenderRef || ocid;
 
-  // ── Save to Supabase ──────────────────────────────────────────
+  function updateField(key, val) {
+    setFields(prev => ({ ...prev, [key]: val }));
+    setDirty(true);
+    setSaved(false);
+  }
+
+  // ── Save / update to Supabase ─────────────────────────────────
   async function handleSave() {
     setSaving(true);
     setSaveError(null);
@@ -66,35 +116,47 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
       const userId    = session?.user?.id    || userProfile?.id    || 'anonymous';
       const userEmail = session?.user?.email || userProfile?.email || '';
 
-      const row = {
-        user_id:           userId,
-        user_email:        userEmail,
-        tender_id:         ocid || tenderRef || title.slice(0, 80),
-        tender_title:      title,
-        tender_ref:        tenderRef,
-        organ_of_state:    buyer,
-        closing_date:      closingDate,
+      const payload = {
+        user_id:            userId,
+        user_email:         userEmail,
+        tender_id:          ocid || tenderRef || title.slice(0, 80),
+        tender_title:       title,
+        tender_ref:         tenderRef,
+        organ_of_state:     buyer,
+        closing_date:       closingDate,
         category,
         status,
-        executive_summary: draft.executiveSummary || '',
-        company_overview:  draft.companyOverview  || '',
-        technical_approach:draft.technicalApproach|| '',
-        team_capability:   draft.teamCapability   || '',
-        pricing_narrative: draft.pricingNarrative || '',
-        compliance_items:  draft.complianceItems  || [],
-        key_requirements:  draft.keyRequirements  || [],
-        document_analyzed: !!(meta?.documentAnalyzed),
-        tokens_used:       meta?.tokensUsed || null,
-        model:             meta?.model || 'gpt-4o-mini',
-        updated_at:        new Date().toISOString(),
+        executive_summary:  fields.executiveSummary,
+        company_overview:   fields.companyOverview,
+        technical_approach: fields.technicalApproach,
+        team_capability:    fields.teamCapability,
+        pricing_narrative:  fields.pricingNarrative,
+        compliance_items:   draft.complianceItems  || [],
+        key_requirements:   draft.keyRequirements  || [],
+        document_analyzed:  !!(meta?.documentAnalyzed),
+        tokens_used:        meta?.tokensUsed || null,
+        model:              meta?.model || 'gpt-4o-mini',
+        updated_at:         new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from('tender_responses')
-        .upsert(row, { onConflict: 'user_id,tender_id' });
+      let dbError;
+      if (rowId) {
+        // UPDATE existing row by primary key
+        ({ error: dbError } = await supabase
+          .from('tender_responses')
+          .update(payload)
+          .eq('id', rowId));
+      } else {
+        // INSERT or upsert (new draft from TenderCard)
+        ({ error: dbError } = await supabase
+          .from('tender_responses')
+          .upsert(payload, { onConflict: 'user_id,tender_id' }));
+      }
 
-      if (error) throw error;
+      if (dbError) throw dbError;
       setSaved(true);
+      setDirty(false);
+      setEditMode(false);
       onSaved?.();
     } catch (err) {
       setSaveError(err.message || 'Save failed. Please try again.');
@@ -111,19 +173,19 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
       `CLOSING DATE: ${closingDate}`,
       '',
       '── EXECUTIVE SUMMARY ──',
-      draft.executiveSummary || '',
+      fields.executiveSummary,
       '',
       '── COMPANY OVERVIEW ──',
-      draft.companyOverview || '',
+      fields.companyOverview,
       '',
       '── TECHNICAL APPROACH ──',
-      draft.technicalApproach || '',
+      fields.technicalApproach,
       '',
       '── TEAM & CAPABILITY ──',
-      draft.teamCapability || '',
+      fields.teamCapability,
       '',
       '── PRICING NARRATIVE ──',
-      draft.pricingNarrative || '',
+      fields.pricingNarrative,
       '',
       '── KEY REQUIREMENTS ──',
       (draft.keyRequirements || []).map(r => `• ${r}`).join('\n'),
@@ -136,6 +198,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
   }
 
   const hasRiskFlags = Array.isArray(draft.riskFlags) && draft.riskFlags.length > 0;
+  const isExisting   = !!rowId; // opened from My Tenders (has a saved row)
 
   return (
     <div className="trm-overlay" role="dialog" aria-modal="true" aria-label="Draft Tender Response">
@@ -143,13 +206,25 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
         {/* Header */}
         <div className="trm-header">
           <div className="trm-header-left">
-            <span className="trm-header-icon">✍</span>
+            <span className="trm-header-icon">{editMode ? '✏️' : '✍'}</span>
             <div>
-              <h2 className="trm-title">Draft Tender Response</h2>
+              <h2 className="trm-title">
+                {isExisting ? (editMode ? 'Editing Draft' : 'Tender Response Draft') : 'Draft Tender Response'}
+              </h2>
               <p className="trm-subtitle">{title}</p>
             </div>
           </div>
-          <button className="trm-close-btn" onClick={onClose} aria-label="Close">✕</button>
+          <div className="trm-header-actions">
+            {/* Edit / View toggle */}
+            <button
+              className={`trm-edit-toggle${editMode ? ' trm-edit-toggle--active' : ''}`}
+              onClick={() => { setEditMode(e => !e); setSaved(false); }}
+              title={editMode ? 'Switch to view mode' : 'Edit draft content'}
+            >
+              {editMode ? '👁 View' : '✏️ Edit'}
+            </button>
+            <button className="trm-close-btn" onClick={onClose} aria-label="Close">✕</button>
+          </div>
         </div>
 
         {/* Meta strip */}
@@ -158,6 +233,8 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
           {closingDate && <span className="trm-meta-chip">📅 {closingDate.split('T')[0]}</span>}
           {meta?.documentAnalyzed && <span className="trm-meta-chip trm-meta-chip--green">📄 Doc Analysed</span>}
           {meta?.tokensUsed && <span className="trm-meta-chip">🔢 {meta.tokensUsed} tokens</span>}
+          {editMode && <span className="trm-meta-chip trm-meta-chip--edit">✏️ Editing</span>}
+          {dirty && !saved && <span className="trm-meta-chip trm-meta-chip--dirty">● Unsaved changes</span>}
         </div>
 
         {/* Risk flags */}
@@ -176,23 +253,53 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
         {/* Body */}
         <div className="trm-body">
           <CollapsibleSection title="Executive Summary" icon="📋">
-            <p>{draft.executiveSummary || '—'}</p>
+            <EditableText
+              value={fields.executiveSummary}
+              onChange={v => updateField('executiveSummary', v)}
+              editMode={editMode}
+              rows={6}
+              placeholder="Write an executive summary for this tender response…"
+            />
           </CollapsibleSection>
 
           <CollapsibleSection title="Company Overview" icon="🏢" defaultOpen={false}>
-            <p>{draft.companyOverview || '—'}</p>
+            <EditableText
+              value={fields.companyOverview}
+              onChange={v => updateField('companyOverview', v)}
+              editMode={editMode}
+              rows={5}
+              placeholder="Describe your company and its relevance to this tender…"
+            />
           </CollapsibleSection>
 
           <CollapsibleSection title="Technical Approach" icon="🔧" defaultOpen={false}>
-            <p>{draft.technicalApproach || '—'}</p>
+            <EditableText
+              value={fields.technicalApproach}
+              onChange={v => updateField('technicalApproach', v)}
+              editMode={editMode}
+              rows={6}
+              placeholder="Detail your technical methodology and approach…"
+            />
           </CollapsibleSection>
 
           <CollapsibleSection title="Team & Capability" icon="👥" defaultOpen={false}>
-            <p>{draft.teamCapability || '—'}</p>
+            <EditableText
+              value={fields.teamCapability}
+              onChange={v => updateField('teamCapability', v)}
+              editMode={editMode}
+              rows={5}
+              placeholder="Describe your team's qualifications and experience…"
+            />
           </CollapsibleSection>
 
           <CollapsibleSection title="Pricing Narrative" icon="💰" defaultOpen={false}>
-            <p>{draft.pricingNarrative || '—'}</p>
+            <EditableText
+              value={fields.pricingNarrative}
+              onChange={v => updateField('pricingNarrative', v)}
+              editMode={editMode}
+              rows={4}
+              placeholder="Explain your pricing structure and value proposition…"
+            />
           </CollapsibleSection>
 
           {Array.isArray(draft.complianceItems) && draft.complianceItems.length > 0 && (
@@ -205,6 +312,14 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
                     {item.note && <span className="trm-compliance-note">{item.note}</span>}
                   </li>
                 ))}
+              </ul>
+            </CollapsibleSection>
+          )}
+
+          {Array.isArray(draft.keyRequirements) && draft.keyRequirements.length > 0 && (
+            <CollapsibleSection title="Key Requirements" icon="📌" defaultOpen={false}>
+              <ul className="trm-strengths-list">
+                {draft.keyRequirements.map((r, i) => <li key={i}>{r}</li>)}
               </ul>
             </CollapsibleSection>
           )}
@@ -225,7 +340,7 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
             <select
               className="trm-status-select"
               value={status}
-              onChange={e => setStatus(e.target.value)}
+              onChange={e => { setStatus(e.target.value); setDirty(true); setSaved(false); }}
               disabled={saving}
             >
               <option value="draft">Draft</option>
@@ -240,9 +355,9 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
             <button
               className="trm-btn trm-btn-primary"
               onClick={handleSave}
-              disabled={saving || saved}
+              disabled={saving || (saved && !dirty)}
             >
-              {saving ? 'Saving…' : saved ? '✅ Saved!' : '💾 Save Draft'}
+              {saving ? 'Saving…' : saved ? '✅ Saved!' : isExisting ? '💾 Save Changes' : '💾 Save Draft'}
             </button>
           </div>
         </div>
