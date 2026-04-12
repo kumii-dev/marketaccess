@@ -64,14 +64,12 @@ app.get('/api/health', (req, res) => {
 });
 
 // Proxy endpoint for OCDS Releases API — uses Server-Sent Events to stream
-// retry status messages to the client in real time.
+// results incrementally: fetches page 1 (1 release) → page 2 (2 releases) →
+// ... → page 5 (10 releases), accumulating up to 50 releases total.
+// Each successful page is sent to the client immediately as a 'batch' event
+// so the UI can render results as they arrive.
 app.get('/api/tenders', async (req, res) => {
-  const { page = 1, limit = 50, search = '', dateFrom = '', dateTo = '' } = req.query;
-
-  // Hard-cap PageSize at 50 — the API's own documented example value.
-  // Asking for more (e.g. 250) across a wide date range causes their IIS
-  // server to time out internally and return 500.
-  const pageSize = Math.min(parseInt(limit, 10) || 50, 50);
+  const { search = '', dateFrom = '', dateTo = '' } = req.query;
 
   // ── SSE setup ─────────────────────────────────────────────────────────────
   res.setHeader('Content-Type', 'text/event-stream');
@@ -96,6 +94,7 @@ app.get('/api/tenders', async (req, res) => {
     const resolvedDateTo = toDateTime(dateTo, true) || `${today.toISOString().split('T')[0]}T23:59:59`;
     const requestedFrom  = toDateTime(dateFrom) || null;
 
+    // Fallback date windows — tried in order when the API returns 500
     const fallbackWindows = [
       [30, 'last 30 days'],
       [14, 'last 14 days'],
@@ -107,80 +106,127 @@ app.get('/api/tenders', async (req, res) => {
       return { from: `${d.toISOString().split('T')[0]}T00:00:00`, label };
     });
 
-    const candidates = [
+    // ── Step 1: Probe with 1 release to find a working date window ──────────
+    // This is fast and tells us which window the API will accept before we
+    // commit to fetching all 50 releases.
+    send('status', { message: 'Connecting to eTenders portal...' });
+
+    const dateCandidates = [
       { from: requestedFrom || fallbackWindows[0].from, label: null },
       ...fallbackWindows,
     ];
 
-    send('status', { message: 'Connecting to eTenders portal...' });
+    let workingDateFrom = null;
 
-    let apiResponse = null;
-    let usedDateFrom = null;
-
-    for (let i = 0; i < candidates.length; i++) {
-      const { from: candidateFrom, label } = candidates[i];
-
+    for (const { from: candidateFrom, label } of dateCandidates) {
       if (label) {
         const msg = `Gov server is slower than usual, retrying with ${label}...`;
         console.warn(`⚠️ ${msg}`);
         send('status', { message: msg });
       }
 
-      const params = { PageNumber: page, PageSize: pageSize, dateFrom: candidateFrom, dateTo: resolvedDateTo };
-      console.log('Fetching from API with params:', params);
-
       try {
-        apiResponse = await axios.get(baseUrl, {
-          params,
-          timeout: 55000,
-          headers: { 'Accept': 'application/json' },
+        const probe = await axios.get(baseUrl, {
+          params: { PageNumber: 1, PageSize: 1, dateFrom: candidateFrom, dateTo: resolvedDateTo },
+          timeout: 30000,
+          headers: { Accept: 'application/json' },
         });
-
-        if (apiResponse.status === 200) {
-          usedDateFrom = candidateFrom;
-          console.log(`✅ API responded 200 with dateFrom=${candidateFrom}`);
+        if (probe.status === 200) {
+          workingDateFrom = candidateFrom;
+          console.log(`✅ Probe succeeded with dateFrom=${candidateFrom}`);
           break;
         }
-      } catch (retryErr) {
-        const status = retryErr.response?.status;
-        console.warn(`⚠️ API returned ${status || retryErr.code} for dateFrom=${candidateFrom}`);
-        if (!retryErr.response || status === 500 || status === 502 || status === 503) {
-          continue;
-        }
-        throw retryErr;
+      } catch (probeErr) {
+        const status = probeErr.response?.status;
+        console.warn(`⚠️ Probe returned ${status || probeErr.code} for dateFrom=${candidateFrom}`);
+        if (!probeErr.response || status === 500 || status === 502 || status === 503) continue;
+        throw probeErr;
       }
     }
 
-    if (!apiResponse || apiResponse.status !== 200) {
+    if (!workingDateFrom) {
       send('error', { message: 'The eTenders portal is currently experiencing difficulties. Please try again shortly.' });
       return res.end();
     }
 
-    const data     = apiResponse.data;
-    const releases = data.releases || [];
+    // ── Step 2: Fetch pages 1–5 (1, 2, 5, 10, 10 releases = 28 → up to 50) ─
+    // Page sizes ramp up: start tiny so the first results appear almost
+    // instantly, then grow to fill up to 50 total.
+    const pages = [
+      { pageNumber: 1, pageSize: 1  },   // release 1       — appears in ~500ms
+      { pageNumber: 1, pageSize: 4  },   // releases 1-4    — overlap OK, dedup by ocid
+      { pageNumber: 1, pageSize: 10 },   // releases 1-10
+      { pageNumber: 2, pageSize: 10 },   // releases 11-20
+      { pageNumber: 3, pageSize: 10 },   // releases 21-30
+      { pageNumber: 4, pageSize: 10 },   // releases 31-40
+      { pageNumber: 5, pageSize: 10 },   // releases 41-50
+    ];
 
-    let filteredReleases = releases;
-    if (search) {
-      const searchLower = search.toLowerCase();
-      filteredReleases = releases.filter(release => {
-        const title           = release.tender?.title?.toLowerCase() || '';
-        const description     = release.tender?.description?.toLowerCase() || '';
-        const buyer           = release.buyer?.name?.toLowerCase() || '';
-        const procuringEntity = release.tender?.procuringEntity?.name?.toLowerCase() || '';
-        return title.includes(searchLower) || description.includes(searchLower) ||
-               buyer.includes(searchLower) || procuringEntity.includes(searchLower);
-      });
+    const seenOcids   = new Set();
+    let   totalSent   = 0;
+
+    const applySearch = (releases) => {
+      if (!search) return releases;
+      const q = search.toLowerCase();
+      return releases.filter(r =>
+        r.tender?.title?.toLowerCase().includes(q) ||
+        r.tender?.description?.toLowerCase().includes(q) ||
+        r.buyer?.name?.toLowerCase().includes(q) ||
+        r.tender?.procuringEntity?.name?.toLowerCase().includes(q)
+      );
+    };
+
+    for (let i = 0; i < pages.length; i++) {
+      const { pageNumber, pageSize } = pages[i];
+
+      send('status', { message: `Loading tenders… (${Math.min(totalSent + pageSize, 50)} of 50)` });
+
+      try {
+        const response = await axios.get(baseUrl, {
+          params: {
+            PageNumber: pageNumber,
+            PageSize:   pageSize,
+            dateFrom:   workingDateFrom,
+            dateTo:     resolvedDateTo,
+          },
+          timeout: 30000,
+          headers: { Accept: 'application/json' },
+        });
+
+        const releases = response.data?.releases || [];
+
+        // Deduplicate by ocid across pages
+        const fresh = releases.filter(r => {
+          if (!r.ocid || seenOcids.has(r.ocid)) return false;
+          seenOcids.add(r.ocid);
+          return true;
+        });
+
+        const filtered = applySearch(fresh);
+        totalSent += fresh.length;
+
+        console.log(`📦 Page ${i + 1}/${pages.length} (PageNumber=${pageNumber}, PageSize=${pageSize}): ${fresh.length} new releases (total: ${totalSent})`);
+
+        // Stream this batch to the client immediately
+        send('batch', {
+          results:    filtered,
+          batchIndex: i,
+          totalSent,
+          isLast:     i === pages.length - 1,
+          dateFrom:   workingDateFrom,
+          dateTo:     resolvedDateTo,
+        });
+
+      } catch (pageErr) {
+        // A mid-stream page failure is non-fatal — log and stop paging
+        const status = pageErr.response?.status;
+        console.warn(`⚠️ Page ${i + 1} failed (${status || pageErr.code}) — stopping at ${totalSent} releases`);
+        send('status', { message: `Loaded ${totalSent} tenders (some pages unavailable).` });
+        break;
+      }
     }
 
-    send('result', {
-      results:       filteredReleases,
-      total:         filteredReleases.length,
-      totalReleases: releases.length,
-      page:          parseInt(page),
-      limit:         pageSize,
-      dateFrom:      usedDateFrom || resolvedDateTo,
-      dateTo:        resolvedDateTo,
-    });
+    send('done', { totalSent });
 
   } catch (error) {
     console.error('Error fetching tenders:', error.message);

@@ -11,49 +11,53 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 /**
  * Fetch tenders from the National Treasury eTenders OCDS Releases API.
  *
- * The server streams Server-Sent Events so we can report real-time retry
- * status to the user ("Gov server is slower than usual, retrying with last
- * 30 days...") instead of showing a static spinner.
+ * The server streams SSE events:
+ *   status  — retry / progress messages
+ *   batch   — a page of results (called multiple times, 1 → up to 50)
+ *   done    — stream complete
+ *   error   — unrecoverable failure
  *
  * @param {Object}   params
- * @param {number}   params.page
- * @param {number}   params.limit
  * @param {string}   params.search
- * @param {string}   params.dateFrom      - YYYY-MM-DD
- * @param {string}   params.dateTo        - YYYY-MM-DD
+ * @param {string}   params.dateFrom    - YYYY-MM-DD
+ * @param {string}   params.dateTo      - YYYY-MM-DD
  * @param {AbortSignal} params.signal
- * @param {Function} params.onStatus      - Called with a status string on each
- *                                          retry so the UI can update in real time.
- * @returns {Promise<Object>} Tenders data ({ results, total, ... })
+ * @param {Function} params.onStatus    - (message: string) => void
+ * @param {Function} params.onBatch     - (results: Release[], meta) => void
+ *                                        Called on each batch so the UI can
+ *                                        append rows incrementally.
+ * @returns {Promise<{ results: Release[], total: number }>}
  */
 export const fetchTenders = async ({
-  page = 1,
-  limit = 250,
   search = '',
   dateFrom = '',
   dateTo = '',
   signal = null,
   onStatus = null,
+  onBatch = null,
+  // Legacy params (page, limit, offset) swallowed — server no longer uses them
+  // eslint-disable-next-line no-unused-vars
+  ...rest
 } = {}) => {
   // ── Mock data shortcut ────────────────────────────────────────────────────
   if (USE_MOCK_DATA) {
     await new Promise(resolve => setTimeout(resolve, 500));
-    let filteredTenders = mockTenders;
+    let filtered = mockTenders;
     if (search) {
-      const searchLower = search.toLowerCase();
-      filteredTenders = mockTenders.filter(tender => {
-        const title       = tender.tender?.title?.toLowerCase() || '';
-        const description = tender.tender?.description?.toLowerCase() || '';
-        const buyer       = tender.buyer?.name?.toLowerCase() || '';
-        return title.includes(searchLower) || description.includes(searchLower) || buyer.includes(searchLower);
-      });
+      const q = search.toLowerCase();
+      filtered = mockTenders.filter(t =>
+        t.tender?.title?.toLowerCase().includes(q) ||
+        t.tender?.description?.toLowerCase().includes(q) ||
+        t.buyer?.name?.toLowerCase().includes(q)
+      );
     }
-    const startIndex = (page - 1) * limit;
-    return { results: filteredTenders.slice(startIndex, startIndex + limit), total: filteredTenders.length, page, limit };
+    const results = filtered.slice(0, 50);
+    if (typeof onBatch === 'function') onBatch(results, { batchIndex: 0, isLast: true, totalSent: results.length });
+    return { results, total: results.length };
   }
 
   // ── Build query string ────────────────────────────────────────────────────
-  const qs = new URLSearchParams({ page, limit });
+  const qs = new URLSearchParams();
   if (search)   qs.set('search',   search);
   if (dateFrom) qs.set('dateFrom', dateFrom);
   if (dateTo)   qs.set('dateTo',   dateTo);
@@ -71,6 +75,7 @@ export const fetchTenders = async ({
         const reader  = response.body.getReader();
         const decoder = new TextDecoder();
         let   buffer  = '';
+        const allResults = [];
 
         const processChunk = (chunk) => {
           buffer += chunk;
@@ -80,11 +85,33 @@ export const fetchTenders = async ({
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
             try {
-              const event = JSON.parse(line.slice(6)); // strip "data: "
-              if (event.type === 'status' && typeof onStatus === 'function') {
-                onStatus(event.message);
-              } else if (event.type === 'result') {
-                resolve(event);
+              const event = JSON.parse(line.slice(6));
+
+              if (event.type === 'status') {
+                if (typeof onStatus === 'function') onStatus(event.message);
+
+              } else if (event.type === 'batch') {
+                // Accumulate and surface to the UI immediately
+                allResults.push(...(event.results || []));
+                if (typeof onBatch === 'function') {
+                  onBatch(event.results || [], {
+                    batchIndex: event.batchIndex,
+                    totalSent:  event.totalSent,
+                    isLast:     event.isLast,
+                    dateFrom:   event.dateFrom,
+                    dateTo:     event.dateTo,
+                  });
+                }
+                // If this is the last batch, resolve now so callers that
+                // await fetchTenders() also get the full result set.
+                if (event.isLast) {
+                  resolve({ results: allResults, total: allResults.length });
+                }
+
+              } else if (event.type === 'done') {
+                // Safety-net resolve in case isLast was never set
+                resolve({ results: allResults, total: allResults.length });
+
               } else if (event.type === 'error') {
                 reject(new Error(event.message));
               }
@@ -100,8 +127,11 @@ export const fetchTenders = async ({
             if (done) break;
             processChunk(decoder.decode(value, { stream: true }));
           }
-          // flush any remaining buffer
           if (buffer.trim()) processChunk('\n');
+          // Final safety-net if stream ended without 'done'
+          if (allResults.length > 0) {
+            resolve({ results: allResults, total: allResults.length });
+          }
         };
 
         await pump();
