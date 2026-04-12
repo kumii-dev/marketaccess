@@ -765,7 +765,11 @@ function App() {
           {loading && <LoadingSpinner />}
 
           {error && !loading && (
-            <ErrorMessage message={error} onRetry={handleRetry} />
+            <ErrorMessage
+              title={error.startsWith('⚠️') ? 'eTenders is currently experiencing technical difficulties.' : 'Oops! Something went wrong'}
+              message={error}
+              onRetry={handleRetry}
+            />
           )}
 
           {!loading && !error && paginatedTenders.length === 0 && (
