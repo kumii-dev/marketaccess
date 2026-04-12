@@ -25,7 +25,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentSection, setCurrentSection] = useState('government-tenders');
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 100, percentage: 0 });
-  const [loadingStatus, setLoadingStatus] = useState('Connecting to eTenders portal...');
+  const [loadingStatus, setLoadingStatus] = useState('Fetching latest tenders...');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -355,7 +355,7 @@ function App() {
 
       // PHASE 2: All caches missed — fetch from API (simple single request)
       console.log('🔄 Phase 2: All caches missed — fetching from API...');
-      setLoadingStatus('Connecting to eTenders portal...');
+      setLoadingStatus('Fetching latest tenders...');
 
       const apiData = await fetchTenders({
         dateFrom: from,
@@ -442,7 +442,7 @@ function App() {
             setLoading(false);
             setLoadingProgress({ current: 100, total: 100, percentage: 100 });
             setError(
-              '⚠️ The eTenders portal (etenders.gov.za) is currently experiencing an outage. ' +
+              '⚠️ The eTenders portal is currently experiencing technical difficulties. ' +
               'Showing cached tenders from our last successful sync. Data may be up to 24 hours old.'
             );
             setIsLoadingMore(false);
@@ -453,8 +453,7 @@ function App() {
         }
 
         setError(
-          '⚠️ The eTenders portal (etenders.gov.za) is currently down. ' +
-          'This is a government infrastructure issue outside our control. ' +
+          '⚠️ The eTenders portal is currently experiencing technical difficulties. ' +
           'Please try again in a few minutes.'
         );
       } else {
@@ -651,7 +650,7 @@ function App() {
 
           {error && !loading && (
             <ErrorMessage
-              title={error.startsWith('⚠️') ? 'eTenders is currently experiencing technical difficulties.' : 'Oops! Something went wrong'}
+              title={error.startsWith('⚠️') ? 'Try again in a few minutes' : 'Try again in a few minutes'}
               message={error}
               onRetry={handleRetry}
             />

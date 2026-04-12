@@ -136,7 +136,7 @@ app.get('/api/tenders', async (req, res) => {
     if (!apiResponse || apiResponse.status !== 200) {
       return res.status(503).json({
         error: 'eTenders API unavailable',
-        message: 'The eTenders portal is currently experiencing difficulties. Please try again shortly.',
+        message: 'The eTenders portal is currently experiencing technical difficulties.',
       });
     }
 

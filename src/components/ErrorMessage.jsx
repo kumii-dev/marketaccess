@@ -1,7 +1,7 @@
 import React from 'react';
 import './ErrorMessage.css';
 
-const ErrorMessage = ({ message, title = 'Oops! Something went wrong', onRetry }) => {
+const ErrorMessage = ({ message, title = 'Try again in a few minutes', onRetry }) => {
   return (
     <div className="error-container">
       <div className="error-icon">⚠️</div>
