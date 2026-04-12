@@ -353,58 +353,24 @@ function App() {
       }
       console.log('❌ SessionStorage cache miss');
 
-      // PHASE 2: All caches missed — stream results incrementally from API
-      // The server fetches pages 1→5 (1, 4, 10, 10, 10, 10, 10 releases) and
-      // sends each page as a 'batch' SSE event. We append to the list on every
-      // batch so rows appear as soon as each page lands.
-      console.log('� Phase 2: All caches missed — streaming from API incrementally...');
-
+      // PHASE 2: All caches missed — fetch from API (simple single request)
+      console.log('🔄 Phase 2: All caches missed — fetching from API...');
       setLoadingStatus('Connecting to eTenders portal...');
-      let firstBatchShown = false;
 
-      const finalData = await fetchTenders({
+      const apiData = await fetchTenders({
         dateFrom: from,
         dateTo:   to,
         signal:   abortController.signal,
-        onStatus: setLoadingStatus,
-        onBatch:  (batchResults, { batchIndex, totalSent, isLast }) => {
-          if (abortController.signal.aborted) return;
-
-          if (!firstBatchShown && batchResults.length > 0) {
-            // First batch — replace the spinner with real rows immediately
-            setAllTenders(batchResults);
-            setLoading(false);
-            setCurrentPage(1);
-            firstBatchShown = true;
-            console.log(`🚀 Batch 0: ${batchResults.length} tender(s) shown (FCP)`);
-          } else if (batchResults.length > 0) {
-            setAllTenders(prev => [...prev, ...batchResults]);
-            console.log(`📦 Batch ${batchIndex}: +${batchResults.length} tenders (total: ${totalSent})`);
-          }
-
-          setLoadingProgress({
-            current:    totalSent,
-            total:      50,
-            percentage: Math.min((totalSent / 50) * 100, 100),
-          });
-
-          if (isLast) {
-            setIsLoadingMore(false);
-            setLoadingProgress({ current: 50, total: 50, percentage: 100 });
-          }
-        },
       });
 
       if (abortController.signal.aborted) return;
 
-      // If somehow no batch callback fired (e.g. mock data), set from final result
-      if (!firstBatchShown && finalData?.results?.length > 0) {
-        setAllTenders(finalData.results);
-        setLoading(false);
-        setCurrentPage(1);
-      }
+      const allLoaded = apiData?.results || [];
 
-      const allLoaded = finalData?.results || [];
+      setAllTenders(allLoaded);
+      setLoading(false);
+      setCurrentPage(1);
+      setLoadingProgress({ current: 100, total: 100, percentage: 100 });
 
       // Log initial tender data load (NIST AU-2, ISO 27001 A.12.4.1)
       auditLogger.createLogEntry({
@@ -424,9 +390,9 @@ function App() {
         }
       }).catch(() => {});
 
-      console.log(`✅ Phase 2 complete — ${allLoaded.length} tenders streamed`);
+      console.log(`✅ Phase 2 complete — ${allLoaded.length} tenders loaded from API`);
 
-      // Phase 2.3: Save to all cache layers (best effort)
+      // Save to all cache layers (best effort)
       if (allLoaded.length > 0) {
         cacheTenders(allLoaded, from, to);
         saveTendersToIDB(allLoaded, from, to).catch(err =>
@@ -439,7 +405,7 @@ function App() {
       }
 
       setIsLoadingMore(false);
-      setLoadingProgress({ current: 50, total: 50, percentage: 100 });
+      setLoadingProgress({ current: 100, total: 100, percentage: 100 });
       console.log('✅ All government tenders loaded and cached successfully');
 
     } catch (err) {

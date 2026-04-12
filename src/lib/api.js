@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { mockTenders } from './mockData';
 
 // API base URL - use environment variable, empty string for production (relative paths), or default to localhost for development
@@ -11,33 +12,21 @@ const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 /**
  * Fetch tenders from the National Treasury eTenders OCDS Releases API.
  *
- * The server streams SSE events:
- *   status  — retry / progress messages
- *   batch   — a page of results (called multiple times, 1 → up to 50)
- *   done    — stream complete
- *   error   — unrecoverable failure
- *
- * @param {Object}   params
- * @param {string}   params.search
- * @param {string}   params.dateFrom    - YYYY-MM-DD
- * @param {string}   params.dateTo      - YYYY-MM-DD
+ * @param {Object}      params
+ * @param {string}      params.search
+ * @param {string}      params.dateFrom   - YYYY-MM-DD
+ * @param {string}      params.dateTo     - YYYY-MM-DD
  * @param {AbortSignal} params.signal
- * @param {Function} params.onStatus    - (message: string) => void
- * @param {Function} params.onBatch     - (results: Release[], meta) => void
- *                                        Called on each batch so the UI can
- *                                        append rows incrementally.
  * @returns {Promise<{ results: Release[], total: number }>}
  */
 export const fetchTenders = async ({
-  search = '',
+  search   = '',
   dateFrom = '',
-  dateTo = '',
-  signal = null,
-  onStatus = null,
-  onBatch = null,
-  // Legacy params (page, limit, offset) swallowed — server no longer uses them
-  // eslint-disable-next-line no-unused-vars
-  ...rest
+  dateTo   = '',
+  signal   = null,
+  /* eslint-disable no-unused-vars */
+  onStatus, onBatch, page, limit, offset,
+  /* eslint-enable no-unused-vars */
 } = {}) => {
   // ── Mock data shortcut ────────────────────────────────────────────────────
   if (USE_MOCK_DATA) {
@@ -51,102 +40,30 @@ export const fetchTenders = async ({
         t.buyer?.name?.toLowerCase().includes(q)
       );
     }
-    const results = filtered.slice(0, 50);
-    if (typeof onBatch === 'function') onBatch(results, { batchIndex: 0, isLast: true, totalSent: results.length });
-    return { results, total: results.length };
+    return { results: filtered.slice(0, 50), total: filtered.length };
   }
 
-  // ── Build query string ────────────────────────────────────────────────────
-  const qs = new URLSearchParams();
-  if (search)   qs.set('search',   search);
-  if (dateFrom) qs.set('dateFrom', dateFrom);
-  if (dateTo)   qs.set('dateTo',   dateTo);
+  // ── Live API call ─────────────────────────────────────────────────────────
+  try {
+    const params = {};
+    if (search)   params.search   = search;
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo)   params.dateTo   = dateTo;
 
-  const url = `${API_BASE_URL}/api/tenders?${qs}`;
+    const config = { params };
+    if (signal) config.signal = signal;
 
-  // ── Stream SSE from server ────────────────────────────────────────────────
-  return new Promise((resolve, reject) => {
-    fetch(url, { signal: signal || undefined })
-      .then(async (response) => {
-        if (!response.ok || !response.body) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const reader  = response.body.getReader();
-        const decoder = new TextDecoder();
-        let   buffer  = '';
-        const allResults = [];
-
-        const processChunk = (chunk) => {
-          buffer += chunk;
-          const lines = buffer.split('\n');
-          buffer = lines.pop(); // keep incomplete last line
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const event = JSON.parse(line.slice(6));
-
-              if (event.type === 'status') {
-                if (typeof onStatus === 'function') onStatus(event.message);
-
-              } else if (event.type === 'batch') {
-                // Accumulate and surface to the UI immediately
-                allResults.push(...(event.results || []));
-                if (typeof onBatch === 'function') {
-                  onBatch(event.results || [], {
-                    batchIndex: event.batchIndex,
-                    totalSent:  event.totalSent,
-                    isLast:     event.isLast,
-                    dateFrom:   event.dateFrom,
-                    dateTo:     event.dateTo,
-                  });
-                }
-                // If this is the last batch, resolve now so callers that
-                // await fetchTenders() also get the full result set.
-                if (event.isLast) {
-                  resolve({ results: allResults, total: allResults.length });
-                }
-
-              } else if (event.type === 'done') {
-                // Safety-net resolve in case isLast was never set
-                resolve({ results: allResults, total: allResults.length });
-
-              } else if (event.type === 'error') {
-                reject(new Error(event.message));
-              }
-            } catch {
-              // ignore malformed SSE line
-            }
-          }
-        };
-
-        const pump = async () => {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            processChunk(decoder.decode(value, { stream: true }));
-          }
-          if (buffer.trim()) processChunk('\n');
-          // Final safety-net if stream ended without 'done'
-          if (allResults.length > 0) {
-            resolve({ results: allResults, total: allResults.length });
-          }
-        };
-
-        await pump();
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') {
-          const abortError = new Error('Request canceled');
-          abortError.name = 'AbortError';
-          reject(abortError);
-        } else {
-          console.error('Error fetching tenders:', err);
-          reject(new Error(err.message || 'Failed to fetch tenders'));
-        }
-      });
-  });
+    const response = await axios.get(`${API_BASE_URL}/api/tenders`, config);
+    return response.data; // { results, total, dateFrom, dateTo }
+  } catch (error) {
+    if (axios.isCancel(error) || error.name === 'AbortError') {
+      const e = new Error('Request canceled');
+      e.name = 'AbortError';
+      throw e;
+    }
+    console.error('Error fetching tenders:', error);
+    throw new Error(error.response?.data?.message || error.message || 'Failed to fetch tenders');
+  }
 };
 
 /**
