@@ -531,9 +531,53 @@ function App() {
       }
 
       console.error('Error loading tenders:', err);
-      setError(err.message || 'Failed to load tenders. Please try again.');
+
+      // ── Detect eTenders API outage ────────────────────────────────────
+      // Status 500 / network error / DNS failure all indicate the upstream
+      // etenders.gov.za API is down (it has no SLA and goes down periodically).
+      // In that case show a clear outage message rather than a generic error,
+      // and attempt one last fallback to Supabase cached data.
+      const isApiOutage =
+        err?.response?.status === 500 ||
+        err?.response?.status === 502 ||
+        err?.response?.status === 503 ||
+        err?.code === 'ERR_NETWORK' ||
+        err?.code === 'ENOTFOUND' ||
+        err?.message?.toLowerCase().includes('network') ||
+        err?.message?.toLowerCase().includes('status code 500');
+
+      if (isApiOutage) {
+        console.warn('⚠️ eTenders API appears to be down — attempting Supabase fallback...');
+        // Last-resort: pull whatever is in Supabase even if TTL expired
+        try {
+          const fallbackTenders = await getTendersFromSupabase(from, to);
+          if (fallbackTenders && fallbackTenders.length > 0) {
+            console.log('✅ Supabase fallback loaded', fallbackTenders.length, 'cached tenders');
+            setAllTenders(fallbackTenders);
+            setLoading(false);
+            setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+            setError(
+              '⚠️ The eTenders portal (etenders.gov.za) is currently experiencing an outage. ' +
+              'Showing cached tenders from our last successful sync. Data may be up to 24 hours old.'
+            );
+            setIsLoadingMore(false);
+            return;
+          }
+        } catch (fallbackErr) {
+          console.warn('⚠️ Supabase fallback also failed:', fallbackErr.message);
+        }
+
+        setError(
+          '⚠️ The eTenders portal (etenders.gov.za) is currently down. ' +
+          'This is a government infrastructure issue outside our control. ' +
+          'Please try again in a few minutes.'
+        );
+      } else {
+        setError(err.message || 'Failed to load tenders. Please try again.');
+      }
+
       logSystemError(err, 'App.loadTenders', 'MEDIUM', { dateFrom: from, dateTo: to });
-      setAllTenders([]);
+      setAllTenders(prev => prev.length > 0 ? prev : []);
       setIsLoadingMore(false);
     } finally {
       if (!abortController.signal.aborted) {
