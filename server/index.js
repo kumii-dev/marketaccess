@@ -71,33 +71,73 @@ app.get('/api/tenders', async (req, res) => {
     // National Treasury eTenders OCDS Releases API
     const baseUrl = 'https://ocds-api.etenders.gov.za/api/OCDSReleases';
     
-    // Calculate default date range (last 30 days) if not provided
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    
-    const defaultDateTo = today.toISOString().split('T')[0]; // YYYY-MM-DD
-    const defaultDateFrom = thirtyDaysAgo.toISOString().split('T')[0]; // YYYY-MM-DD
-    
-    // Build query parameters using the correct API parameter names
-    // Note: dateFrom and dateTo are REQUIRED by the API
-    const params = {
-      PageNumber: page,
-      PageSize: limit,
-      dateFrom: dateFrom || defaultDateFrom,
-      dateTo: dateTo || defaultDateTo
+    // API requires full ISO 8601 datetime format (date-time), not just YYYY-MM-DD
+    const toDateTime = (dateStr, endOfDay = false) => {
+      if (!dateStr) return null;
+      if (dateStr.includes('T')) return dateStr;
+      return endOfDay ? `${dateStr}T23:59:59` : `${dateStr}T00:00:00`;
     };
-    
-    console.log('Fetching from API with params:', params);
-    
-    const response = await axios.get(baseUrl, { 
-      params,
-      timeout: 50000, // 50 second timeout
-      headers: {
-        'Accept': 'application/json'
-      }
+
+    const today = new Date();
+
+    // ── Retry strategy: if the API 500s on the requested window, shrink it ──
+    // etenders.gov.za 500s when the result set is too large or their server
+    // times out internally. We try progressively shorter windows until one works.
+    const resolvedDateTo = toDateTime(dateTo, true) || `${today.toISOString().split('T')[0]}T23:59:59`;
+
+    // Build candidate date windows: requested → last 90d → last 60d → last 45d → last 30d
+    const requestedFrom = toDateTime(dateFrom) || null;
+    const fallbackWindows = [90, 60, 45, 30].map(days => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - days);
+      return `${d.toISOString().split('T')[0]}T00:00:00`;
     });
-    
+    const candidateFroms = requestedFrom
+      ? [requestedFrom, ...fallbackWindows]
+      : fallbackWindows;
+
+    let response = null;
+    let _usedDateFrom = null;
+
+    for (const candidateFrom of candidateFroms) {
+      const params = {
+        PageNumber: page,
+        PageSize: limit,
+        dateFrom: candidateFrom,
+        dateTo: resolvedDateTo,
+      };
+
+      console.log('Fetching from API with params:', params);
+
+      try {
+        response = await axios.get(baseUrl, {
+          params,
+          timeout: 55000,
+          headers: { 'Accept': 'application/json' },
+        });
+
+        if (response.status === 200) {
+          _usedDateFrom = candidateFrom;
+          console.log(`✅ API responded 200 with dateFrom=${candidateFrom}`);
+          break;
+        }
+      } catch (retryErr) {
+        const status = retryErr.response?.status;
+        console.warn(`⚠️ API returned ${status || retryErr.code} for dateFrom=${candidateFrom} — retrying with smaller window...`);
+        if (!retryErr.response || status === 500 || status === 502 || status === 503) {
+          continue; // try next window
+        }
+        throw retryErr; // non-retryable error (e.g. 401, 400)
+      }
+    }
+
+    if (!response || response.status !== 200) {
+      return res.status(502).json({
+        error: 'eTenders API unavailable',
+        message: 'The eTenders portal is currently experiencing difficulties. Please try again shortly.',
+      });
+    }
+
     console.log('API Response status:', response.status);
     
     // The API returns a ReleasePackage with releases array
@@ -127,8 +167,8 @@ app.get('/api/tenders', async (req, res) => {
       totalReleases: releases.length,
       page: parseInt(page),
       limit: parseInt(limit),
-      dateFrom: params.dateFrom,
-      dateTo: params.dateTo
+      dateFrom: _usedDateFrom || resolvedDateTo,
+      dateTo: resolvedDateTo
     });
   } catch (error) {
     console.error('Error fetching tenders:', error.message);
