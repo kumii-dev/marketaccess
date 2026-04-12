@@ -25,6 +25,7 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentSection, setCurrentSection] = useState('government-tenders');
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 100, percentage: 0 });
+  const [loadingStatus, setLoadingStatus] = useState('Connecting to eTenders portal...');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -357,12 +358,14 @@ function App() {
 
       // Phase 2.1a: Load first 5 tenders ASAP (optimize FCP, LCP, TTI)
       console.log('🚀 Phase 2.1a: Loading first 5 tenders for fast FCP...');
+      setLoadingStatus('Connecting to eTenders portal...');
       const microBatch1 = await fetchTenders({
         page: 1,
         limit: 5,
         dateFrom: from,
         dateTo: to,
-        signal: abortController.signal
+        signal: abortController.signal,
+        onStatus: setLoadingStatus,
       });
 
       if (abortController.signal.aborted) return;
@@ -762,7 +765,7 @@ function App() {
             </div>
           )}
 
-          {loading && <LoadingSpinner />}
+          {loading && <LoadingSpinner statusMessage={loadingStatus} />}
 
           {error && !loading && (
             <ErrorMessage

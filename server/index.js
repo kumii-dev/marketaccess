@@ -63,15 +63,24 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
-// Proxy endpoint for OCDS Releases API
+// Proxy endpoint for OCDS Releases API — uses Server-Sent Events to stream
+// retry status messages to the client in real time.
 app.get('/api/tenders', async (req, res) => {
+  const { page = 1, limit = 250, search = '', dateFrom = '', dateTo = '' } = req.query;
+
+  // ── SSE setup ─────────────────────────────────────────────────────────────
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders();
+
+  const send = (type, payload) => {
+    res.write(`data: ${JSON.stringify({ type, ...payload })}\n\n`);
+  };
+
   try {
-    const { page = 1, limit = 250, search = '', dateFrom = '', dateTo = '' } = req.query;
-    
-    // National Treasury eTenders OCDS Releases API
     const baseUrl = 'https://ocds-api.etenders.gov.za/api/OCDSReleases';
-    
-    // API requires full ISO 8601 datetime format (date-time), not just YYYY-MM-DD
+
     const toDateTime = (dateStr, endOfDay = false) => {
       if (!dateStr) return null;
       if (dateStr.includes('T')) return dateStr;
@@ -79,123 +88,100 @@ app.get('/api/tenders', async (req, res) => {
     };
 
     const today = new Date();
-
-    // ── Retry strategy: shrink the date window when the gov server is slow ──
-    // etenders.gov.za 500s when the result set is too large or their IIS server
-    // hits an internal timeout. Try progressively shorter windows until one works.
     const resolvedDateTo = toDateTime(dateTo, true) || `${today.toISOString().split('T')[0]}T23:59:59`;
+    const requestedFrom  = toDateTime(dateFrom) || null;
 
-    const requestedFrom = toDateTime(dateFrom) || null;
-
-    // [days, label] — label is logged when that fallback is triggered
     const fallbackWindows = [
-      [30,  'last 30 days'],
-      [14,  'last 14 days'],
-      [7,   'last 7 days'],
-      [3,   'last 3 days'],
+      [30, 'last 30 days'],
+      [14, 'last 14 days'],
+      [7,  'last 7 days'],
+      [3,  'last 3 days'],
     ].map(([days, label]) => {
       const d = new Date(today);
       d.setDate(d.getDate() - days);
       return { from: `${d.toISOString().split('T')[0]}T00:00:00`, label };
     });
 
-    // First candidate is the originally requested range (no label — no warning needed)
     const candidates = [
       { from: requestedFrom || fallbackWindows[0].from, label: null },
       ...fallbackWindows,
     ];
 
-    let response = null;
-    let _usedDateFrom = null;
+    send('status', { message: 'Connecting to eTenders portal...' });
+
+    let apiResponse = null;
+    let usedDateFrom = null;
 
     for (let i = 0; i < candidates.length; i++) {
       const { from: candidateFrom, label } = candidates[i];
 
       if (label) {
-        console.warn(`⚠️ Gov server is slower than usual, retrying with ${label}...`);
+        const msg = `Gov server is slower than usual, retrying with ${label}...`;
+        console.warn(`⚠️ ${msg}`);
+        send('status', { message: msg });
       }
 
-      const params = {
-        PageNumber: page,
-        PageSize: limit,
-        dateFrom: candidateFrom,
-        dateTo: resolvedDateTo,
-      };
-
+      const params = { PageNumber: page, PageSize: limit, dateFrom: candidateFrom, dateTo: resolvedDateTo };
       console.log('Fetching from API with params:', params);
 
       try {
-        response = await axios.get(baseUrl, {
+        apiResponse = await axios.get(baseUrl, {
           params,
           timeout: 55000,
           headers: { 'Accept': 'application/json' },
         });
 
-        if (response.status === 200) {
-          _usedDateFrom = candidateFrom;
+        if (apiResponse.status === 200) {
+          usedDateFrom = candidateFrom;
           console.log(`✅ API responded 200 with dateFrom=${candidateFrom}`);
           break;
         }
       } catch (retryErr) {
         const status = retryErr.response?.status;
+        console.warn(`⚠️ API returned ${status || retryErr.code} for dateFrom=${candidateFrom}`);
         if (!retryErr.response || status === 500 || status === 502 || status === 503) {
-          console.warn(`⚠️ API returned ${status || retryErr.code} for dateFrom=${candidateFrom}`);
-          continue; // try next window
+          continue;
         }
-        throw retryErr; // non-retryable (e.g. 400, 401)
+        throw retryErr;
       }
     }
 
-    if (!response || response.status !== 200) {
-      return res.status(502).json({
-        error: 'eTenders API unavailable',
-        message: 'The eTenders portal is currently experiencing difficulties. Please try again shortly.',
-      });
+    if (!apiResponse || apiResponse.status !== 200) {
+      send('error', { message: 'The eTenders portal is currently experiencing difficulties. Please try again shortly.' });
+      return res.end();
     }
 
-    console.log('API Response status:', response.status);
-    
-    // The API returns a ReleasePackage with releases array
-    const data = response.data;
+    const data     = apiResponse.data;
     const releases = data.releases || [];
-    
-    // Filter by search on server side if provided
+
     let filteredReleases = releases;
     if (search) {
       const searchLower = search.toLowerCase();
       filteredReleases = releases.filter(release => {
-        const title = release.tender?.title?.toLowerCase() || '';
-        const description = release.tender?.description?.toLowerCase() || '';
-        const buyer = release.buyer?.name?.toLowerCase() || '';
+        const title           = release.tender?.title?.toLowerCase() || '';
+        const description     = release.tender?.description?.toLowerCase() || '';
+        const buyer           = release.buyer?.name?.toLowerCase() || '';
         const procuringEntity = release.tender?.procuringEntity?.name?.toLowerCase() || '';
-        
-        return title.includes(searchLower) || 
-               description.includes(searchLower) || 
-               buyer.includes(searchLower) ||
-               procuringEntity.includes(searchLower);
+        return title.includes(searchLower) || description.includes(searchLower) ||
+               buyer.includes(searchLower) || procuringEntity.includes(searchLower);
       });
     }
-    
-    res.json({
-      results: filteredReleases,
-      total: filteredReleases.length,
+
+    send('result', {
+      results:       filteredReleases,
+      total:         filteredReleases.length,
       totalReleases: releases.length,
-      page: parseInt(page),
-      limit: parseInt(limit),
-      dateFrom: _usedDateFrom || resolvedDateTo,
-      dateTo: resolvedDateTo
+      page:          parseInt(page),
+      limit:         parseInt(limit),
+      dateFrom:      usedDateFrom || resolvedDateTo,
+      dateTo:        resolvedDateTo,
     });
+
   } catch (error) {
     console.error('Error fetching tenders:', error.message);
-    console.error('Error details:', error.response?.data);
-    console.error('Request URL:', error.config?.url);
-    console.error('Request params:', error.config?.params);
-    
-    res.status(error.response?.status || 500).json({
-      error: 'Failed to fetch tenders',
-      message: error.message,
-      details: error.response?.data || null
-    });
+    send('error', { message: error.response?.data?.message || error.message || 'Failed to fetch tenders' });
+  } finally {
+    res.end();
   }
 });
 

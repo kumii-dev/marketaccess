@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { mockTenders } from './mockData';
 
 // API base URL - use environment variable, empty string for production (relative paths), or default to localhost for development
@@ -10,86 +9,114 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
 const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK_DATA === 'true';
 
 /**
- * Fetch tenders from the National Treasury eTenders OCDS Releases API
- * @param {Object} params - Query parameters
- * @param {number} params.page - Page number
- * @param {number} params.limit - Items per page
- * @param {string} params.search - Search query
- * @param {string} params.dateFrom - Start date (YYYY-MM-DD)
- * @param {string} params.dateTo - End date (YYYY-MM-DD)
- * @param {AbortSignal} params.signal - AbortController signal
- * @returns {Promise<Object>} Tenders data
+ * Fetch tenders from the National Treasury eTenders OCDS Releases API.
+ *
+ * The server streams Server-Sent Events so we can report real-time retry
+ * status to the user ("Gov server is slower than usual, retrying with last
+ * 30 days...") instead of showing a static spinner.
+ *
+ * @param {Object}   params
+ * @param {number}   params.page
+ * @param {number}   params.limit
+ * @param {string}   params.search
+ * @param {string}   params.dateFrom      - YYYY-MM-DD
+ * @param {string}   params.dateTo        - YYYY-MM-DD
+ * @param {AbortSignal} params.signal
+ * @param {Function} params.onStatus      - Called with a status string on each
+ *                                          retry so the UI can update in real time.
+ * @returns {Promise<Object>} Tenders data ({ results, total, ... })
  */
-export const fetchTenders = async ({ 
-  page = 1, 
-  limit = 250, 
-  search = '', 
-  dateFrom = '', 
+export const fetchTenders = async ({
+  page = 1,
+  limit = 250,
+  search = '',
+  dateFrom = '',
   dateTo = '',
-  signal = null 
+  signal = null,
+  onStatus = null,
 } = {}) => {
-  // Return mock data if enabled
+  // ── Mock data shortcut ────────────────────────────────────────────────────
   if (USE_MOCK_DATA) {
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate network delay
-    
+    await new Promise(resolve => setTimeout(resolve, 500));
     let filteredTenders = mockTenders;
-    
-    // Apply search filter
     if (search) {
       const searchLower = search.toLowerCase();
       filteredTenders = mockTenders.filter(tender => {
-        const title = tender.tender?.title?.toLowerCase() || '';
+        const title       = tender.tender?.title?.toLowerCase() || '';
         const description = tender.tender?.description?.toLowerCase() || '';
-        const buyer = tender.buyer?.name?.toLowerCase() || '';
-        return title.includes(searchLower) || 
-               description.includes(searchLower) || 
-               buyer.includes(searchLower);
+        const buyer       = tender.buyer?.name?.toLowerCase() || '';
+        return title.includes(searchLower) || description.includes(searchLower) || buyer.includes(searchLower);
       });
     }
-    
-    // Apply pagination
     const startIndex = (page - 1) * limit;
-    const endIndex = startIndex + limit;
-    const paginatedTenders = filteredTenders.slice(startIndex, endIndex);
-    
-    return {
-      results: paginatedTenders,
-      total: filteredTenders.length,
-      page,
-      limit
-    };
+    return { results: filteredTenders.slice(startIndex, startIndex + limit), total: filteredTenders.length, page, limit };
   }
-  
-  try {
-    const params = { page, limit };
-    if (search) {
-      params.search = search;
-    }
-    if (dateFrom) {
-      params.dateFrom = dateFrom;
-    }
-    if (dateTo) {
-      params.dateTo = dateTo;
-    }
-    
-    const config = { params };
-    if (signal) {
-      config.signal = signal;
-    }
-    
-    const response = await axios.get(`${API_BASE_URL}/api/tenders`, config);
-    return response.data;
-  } catch (error) {
-    // Re-throw abort errors
-    if (axios.isCancel(error) || error.name === 'AbortError') {
-      const abortError = new Error('Request canceled');
-      abortError.name = 'AbortError';
-      throw abortError;
-    }
-    
-    console.error('Error fetching tenders:', error);
-    throw new Error(error.response?.data?.message || 'Failed to fetch tenders');
-  }
+
+  // ── Build query string ────────────────────────────────────────────────────
+  const qs = new URLSearchParams({ page, limit });
+  if (search)   qs.set('search',   search);
+  if (dateFrom) qs.set('dateFrom', dateFrom);
+  if (dateTo)   qs.set('dateTo',   dateTo);
+
+  const url = `${API_BASE_URL}/api/tenders?${qs}`;
+
+  // ── Stream SSE from server ────────────────────────────────────────────────
+  return new Promise((resolve, reject) => {
+    fetch(url, { signal: signal || undefined })
+      .then(async (response) => {
+        if (!response.ok || !response.body) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const reader  = response.body.getReader();
+        const decoder = new TextDecoder();
+        let   buffer  = '';
+
+        const processChunk = (chunk) => {
+          buffer += chunk;
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // keep incomplete last line
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const event = JSON.parse(line.slice(6)); // strip "data: "
+              if (event.type === 'status' && typeof onStatus === 'function') {
+                onStatus(event.message);
+              } else if (event.type === 'result') {
+                resolve(event);
+              } else if (event.type === 'error') {
+                reject(new Error(event.message));
+              }
+            } catch {
+              // ignore malformed SSE line
+            }
+          }
+        };
+
+        const pump = async () => {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            processChunk(decoder.decode(value, { stream: true }));
+          }
+          // flush any remaining buffer
+          if (buffer.trim()) processChunk('\n');
+        };
+
+        await pump();
+      })
+      .catch((err) => {
+        if (err.name === 'AbortError') {
+          const abortError = new Error('Request canceled');
+          abortError.name = 'AbortError';
+          reject(abortError);
+        } else {
+          console.error('Error fetching tenders:', err);
+          reject(new Error(err.message || 'Failed to fetch tenders'));
+        }
+      });
+  });
 };
 
 /**
