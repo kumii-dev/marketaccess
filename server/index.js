@@ -80,26 +80,41 @@ app.get('/api/tenders', async (req, res) => {
 
     const today = new Date();
 
-    // ── Retry strategy: if the API 500s on the requested window, shrink it ──
-    // etenders.gov.za 500s when the result set is too large or their server
-    // times out internally. We try progressively shorter windows until one works.
+    // ── Retry strategy: shrink the date window when the gov server is slow ──
+    // etenders.gov.za 500s when the result set is too large or their IIS server
+    // hits an internal timeout. Try progressively shorter windows until one works.
     const resolvedDateTo = toDateTime(dateTo, true) || `${today.toISOString().split('T')[0]}T23:59:59`;
 
-    // Build candidate date windows: requested → last 90d → last 60d → last 45d → last 30d
     const requestedFrom = toDateTime(dateFrom) || null;
-    const fallbackWindows = [90, 60, 45, 30].map(days => {
+
+    // [days, label] — label is logged when that fallback is triggered
+    const fallbackWindows = [
+      [30,  'last 30 days'],
+      [14,  'last 14 days'],
+      [7,   'last 7 days'],
+      [3,   'last 3 days'],
+    ].map(([days, label]) => {
       const d = new Date(today);
       d.setDate(d.getDate() - days);
-      return `${d.toISOString().split('T')[0]}T00:00:00`;
+      return { from: `${d.toISOString().split('T')[0]}T00:00:00`, label };
     });
-    const candidateFroms = requestedFrom
-      ? [requestedFrom, ...fallbackWindows]
-      : fallbackWindows;
+
+    // First candidate is the originally requested range (no label — no warning needed)
+    const candidates = [
+      { from: requestedFrom || fallbackWindows[0].from, label: null },
+      ...fallbackWindows,
+    ];
 
     let response = null;
     let _usedDateFrom = null;
 
-    for (const candidateFrom of candidateFroms) {
+    for (let i = 0; i < candidates.length; i++) {
+      const { from: candidateFrom, label } = candidates[i];
+
+      if (label) {
+        console.warn(`⚠️ Gov server is slower than usual, retrying with ${label}...`);
+      }
+
       const params = {
         PageNumber: page,
         PageSize: limit,
@@ -123,11 +138,11 @@ app.get('/api/tenders', async (req, res) => {
         }
       } catch (retryErr) {
         const status = retryErr.response?.status;
-        console.warn(`⚠️ API returned ${status || retryErr.code} for dateFrom=${candidateFrom} — retrying with smaller window...`);
         if (!retryErr.response || status === 500 || status === 502 || status === 503) {
+          console.warn(`⚠️ API returned ${status || retryErr.code} for dateFrom=${candidateFrom}`);
           continue; // try next window
         }
-        throw retryErr; // non-retryable error (e.g. 401, 400)
+        throw retryErr; // non-retryable (e.g. 400, 401)
       }
     }
 
