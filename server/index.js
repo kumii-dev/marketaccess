@@ -66,7 +66,12 @@ app.get('/api/health', (req, res) => {
 // Proxy endpoint for OCDS Releases API — uses Server-Sent Events to stream
 // retry status messages to the client in real time.
 app.get('/api/tenders', async (req, res) => {
-  const { page = 1, limit = 250, search = '', dateFrom = '', dateTo = '' } = req.query;
+  const { page = 1, limit = 50, search = '', dateFrom = '', dateTo = '' } = req.query;
+
+  // Hard-cap PageSize at 50 — the API's own documented example value.
+  // Asking for more (e.g. 250) across a wide date range causes their IIS
+  // server to time out internally and return 500.
+  const pageSize = Math.min(parseInt(limit, 10) || 50, 50);
 
   // ── SSE setup ─────────────────────────────────────────────────────────────
   res.setHeader('Content-Type', 'text/event-stream');
@@ -121,7 +126,7 @@ app.get('/api/tenders', async (req, res) => {
         send('status', { message: msg });
       }
 
-      const params = { PageNumber: page, PageSize: limit, dateFrom: candidateFrom, dateTo: resolvedDateTo };
+      const params = { PageNumber: page, PageSize: pageSize, dateFrom: candidateFrom, dateTo: resolvedDateTo };
       console.log('Fetching from API with params:', params);
 
       try {
@@ -172,7 +177,7 @@ app.get('/api/tenders', async (req, res) => {
       total:         filteredReleases.length,
       totalReleases: releases.length,
       page:          parseInt(page),
-      limit:         parseInt(limit),
+      limit:         pageSize,
       dateFrom:      usedDateFrom || resolvedDateTo,
       dateTo:        resolvedDateTo,
     });
