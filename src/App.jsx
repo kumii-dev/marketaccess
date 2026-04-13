@@ -26,6 +26,7 @@ function App() {
   const [currentSection, setCurrentSection] = useState('government-tenders');
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 100, percentage: 0 });
   const [loadingStatus, setLoadingStatus] = useState('Fetching latest tenders...');
+  const [loadingSubStatus, setLoadingSubStatus] = useState('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [filters, setFilters] = useState({
     search: '',
@@ -295,6 +296,12 @@ function App() {
     setLoading(true);
     setError(null);
     setLoadingProgress({ current: 0, total: 100, percentage: 0 });
+    setLoadingSubStatus('');
+
+    // After 20s still loading — let the user know the gov server is just slow
+    const slowTimer = setTimeout(() => {
+      setLoadingSubStatus('eTenders server is slow today, still fetching...');
+    }, 20000);
 
     try {
       // PHASE 0: Check IndexedDB first (10-50ms, 24hr TTL)
@@ -355,7 +362,7 @@ function App() {
 
       // PHASE 2: All caches missed — fetch from API (simple single request)
       console.log('🔄 Phase 2: All caches missed — fetching from API...');
-      setLoadingStatus('Fetching latest tenders...');
+      setLoadingStatus('');
 
       const apiData = await fetchTenders({
         dateFrom: from,
@@ -464,6 +471,8 @@ function App() {
       setAllTenders(prev => prev.length > 0 ? prev : []);
       setIsLoadingMore(false);
     } finally {
+      clearTimeout(slowTimer);
+      setLoadingSubStatus('');
       if (!abortController.signal.aborted) {
         setLoading(false);
         setIsLoadingMore(false);
@@ -646,7 +655,7 @@ function App() {
             </div>
           )}
 
-          {loading && <LoadingSpinner statusMessage={loadingStatus} />}
+          {loading && <LoadingSpinner statusMessage={loadingStatus} subMessage={loadingSubStatus} />}
 
           {error && !loading && (
             <ErrorMessage

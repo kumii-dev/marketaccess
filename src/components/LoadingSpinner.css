@@ -25,3 +25,10 @@
   color: #666;
   font-size: 1rem;
 }
+
+.loading-sub-text {
+  margin-top: 0.4rem;
+  color: #f59e0b;
+  font-size: 0.85rem;
+  font-style: italic;
+}
