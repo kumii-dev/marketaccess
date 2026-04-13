@@ -83,22 +83,30 @@ app.get('/api/tenders', async (req, res) => {
     const resolvedDateTo = toDate(dateTo) || today.toISOString().split('T')[0];
     const requestedFrom  = toDate(dateFrom) || null;
 
-    // Progressively shorter windows — gov IIS times out on large result sets
-    const fallbackWindows = [
-      [30, 'last 30 days'],
-      [14, 'last 14 days'],
-      [7,  'last 7 days'],
-      [3,  'last 3 days'],
-    ].map(([days, label]) => {
+    // Start with the narrowest window (today only = fastest response),
+    // then widen progressively if the gov IIS server times out or 500s.
+    // Postman confirmed a 2-day window took ~1m 42s; 1-day should be ~30-60s.
+    const daysAgo = (n) => {
       const d = new Date(today);
-      d.setDate(d.getDate() - days);
-      return { from: d.toISOString().split('T')[0], label };
-    });
+      d.setDate(d.getDate() - n);
+      return d.toISOString().split('T')[0];
+    };
 
-    const candidates = [
-      { from: requestedFrom || fallbackWindows[0].from, label: null },
-      ...fallbackWindows,
-    ];
+    const candidates = requestedFrom
+      // Caller supplied explicit dates — honour them, then fall back narrower
+      ? [
+          { from: requestedFrom,  label: null },
+          { from: daysAgo(1),     label: 'today + yesterday (2 days)' },
+          { from: daysAgo(3),     label: 'last 3 days' },
+          { from: daysAgo(7),     label: 'last 7 days' },
+        ]
+      // No dates supplied — start from today (1 day) for fastest first paint
+      : [
+          { from: resolvedDateTo, label: null },              // today only (~1 day)
+          { from: daysAgo(1),     label: 'last 2 days' },
+          { from: daysAgo(3),     label: 'last 3 days' },
+          { from: daysAgo(7),     label: 'last 7 days' },
+        ];
 
     let apiResponse = null;
     let usedDateFrom = null;
