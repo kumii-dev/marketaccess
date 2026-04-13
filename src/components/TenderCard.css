@@ -371,7 +371,7 @@
   width: 100%;
   margin-top: 10px;
   padding: 9px 14px;
-  background: linear-gradient(135deg, #16a34a, #16a34a);
+  background: linear-gradient(135deg, #7a8567, #668066);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -379,6 +379,7 @@
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.1s;
+  display: none;
 }
 
 .tender-draft-btn:hover:not(:disabled) {
