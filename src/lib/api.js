@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { mockTenders } from './mockData';
+import fallbackSnapshot from '../etender/01112025.json';
 
 // API base URL - use environment variable, empty string for production (relative paths), or default to localhost for development
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined 
@@ -54,13 +55,42 @@ export const fetchTenders = async ({
     if (signal) config.signal = signal;
 
     const response = await axios.get(`${API_BASE_URL}/api/tenders`, config);
-    return response.data; // { results, total, dateFrom, dateTo }
+
+    // Server already serves the static fallback with isFallback=true — pass it through
+    return response.data; // { results, total, dateFrom, dateTo, isFallback?, fallbackMsg? }
   } catch (error) {
     if (axios.isCancel(error) || error.name === 'AbortError') {
       const e = new Error('Request canceled');
       e.name = 'AbortError';
       throw e;
     }
+
+    const status = error.response?.status;
+    const isServerError = !status || status >= 500;
+
+    // ── Client-side fallback: use the bundled 01112025.json snapshot ─────────
+    if (isServerError) {
+      console.warn('⚠️ [api.js] eTenders server error — using bundled fallback snapshot (01112025.json)');
+      const releases = fallbackSnapshot.Releases || [];
+      const filtered = search
+        ? releases.filter(r => {
+            const q = search.toLowerCase();
+            return (
+              r.tender?.title?.toLowerCase().includes(q) ||
+              r.tender?.description?.toLowerCase().includes(q) ||
+              r.buyer?.name?.toLowerCase().includes(q) ||
+              r.tender?.procuringEntity?.name?.toLowerCase().includes(q)
+            );
+          })
+        : releases;
+      return {
+        results:     filtered,
+        total:       filtered.length,
+        isFallback:  true,
+        fallbackMsg: 'eTenders is currently unavailable. Showing cached tenders.',
+      };
+    }
+
     console.error('Error fetching tenders:', error);
     throw new Error(error.response?.data?.message || error.message || 'Failed to fetch tenders');
   }

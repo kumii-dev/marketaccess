@@ -28,6 +28,7 @@ function App() {
   const [loadingStatus, setLoadingStatus] = useState('Fetching latest tenders...');
   const [loadingSubStatus, setLoadingSubStatus] = useState('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [fallbackNotice, setFallbackNotice] = useState(''); // set when static snapshot is used
   const [filters, setFilters] = useState({
     search: '',
     province: '',
@@ -379,6 +380,13 @@ function App() {
       setCurrentPage(1);
       setLoadingProgress({ current: 100, total: 100, percentage: 100 });
 
+      // Show fallback notice if the API was unavailable
+      if (apiData?.isFallback) {
+        setFallbackNotice(apiData.fallbackMsg || 'Showing cached tenders — live data unavailable.');
+      } else {
+        setFallbackNotice('');
+      }
+
       // Log initial tender data load (NIST AU-2, ISO 27001 A.12.4.1)
       auditLogger.createLogEntry({
         category: AuditEventCategory.DATA_ACCESS,
@@ -636,6 +644,15 @@ function App() {
             dateTo={dateTo}
             onDateRangeChange={handleDateRangeChange}
           />
+
+          {/* Fallback notice — shown when static snapshot replaces live eTenders data */}
+          {fallbackNotice && (
+            <div className="fallback-notice" role="alert">
+              <span className="fallback-notice__icon">⚠️</span>
+              <span className="fallback-notice__text">{fallbackNotice}</span>
+              <button className="fallback-notice__retry" onClick={handleRetry}>Retry live data</button>
+            </div>
+          )}
 
           {/* Progressive Loading Indicator */}
           {isLoadingMore && (
