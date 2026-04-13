@@ -73,15 +73,15 @@ app.get('/api/tenders', async (req, res) => {
   try {
     const baseUrl = 'https://ocds-api.etenders.gov.za/api/OCDSReleases';
 
-    const toDateTime = (dateStr, endOfDay = false) => {
+    const toDate = (dateStr) => {
       if (!dateStr) return null;
-      if (dateStr.includes('T')) return dateStr;
-      return endOfDay ? `${dateStr}T23:59:59` : `${dateStr}T00:00:00`;
+      // Strip any time component — API accepts plain YYYY-MM-DD (confirmed via Postman)
+      return dateStr.split('T')[0];
     };
 
     const today = new Date();
-    const resolvedDateTo = toDateTime(dateTo, true) || `${today.toISOString().split('T')[0]}T23:59:59`;
-    const requestedFrom  = toDateTime(dateFrom) || null;
+    const resolvedDateTo = toDate(dateTo) || today.toISOString().split('T')[0];
+    const requestedFrom  = toDate(dateFrom) || null;
 
     // Progressively shorter windows — gov IIS times out on large result sets
     const fallbackWindows = [
@@ -92,7 +92,7 @@ app.get('/api/tenders', async (req, res) => {
     ].map(([days, label]) => {
       const d = new Date(today);
       d.setDate(d.getDate() - days);
-      return { from: `${d.toISOString().split('T')[0]}T00:00:00`, label };
+      return { from: d.toISOString().split('T')[0], label };
     });
 
     const candidates = [
@@ -116,7 +116,7 @@ app.get('/api/tenders', async (req, res) => {
             dateFrom:   candidateFrom,
             dateTo:     resolvedDateTo,
           },
-          timeout: 30000,
+          timeout: 120000, // 2 min — Postman confirmed API can take ~1m 42s
           headers: { Accept: 'application/json' },
         });
 
