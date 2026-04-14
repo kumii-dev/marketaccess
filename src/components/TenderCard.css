@@ -379,7 +379,6 @@
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, transform 0.1s;
-  display: none;
 }
 
 .tender-draft-btn:hover:not(:disabled) {
