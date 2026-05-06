@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { mockTenders } from './mockData';
 import fallbackSnapshot from '../etender/01112025.json';
+import { saveDailySnapshot, getLatestDailySnapshot } from '../utils/etenderDailyCache';
 
 // API base URL - use environment variable, empty string for production (relative paths), or default to localhost for development
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined 
@@ -56,8 +57,14 @@ export const fetchTenders = async ({
 
     const response = await axios.get(`${API_BASE_URL}/api/tenders`, config);
 
+    // After every successful live fetch, persist to daily cache (fire-and-forget)
+    const liveData = response.data;
+    if (Array.isArray(liveData?.results) && liveData.results.length > 0) {
+      saveDailySnapshot(liveData.results).catch(() => null);
+    }
+
     // Server already serves the static fallback with isFallback=true — pass it through
-    return response.data; // { results, total, dateFrom, dateTo, isFallback?, fallbackMsg? }
+    return liveData; // { results, total, dateFrom, dateTo, isFallback?, fallbackMsg? }
   } catch (error) {
     if (axios.isCancel(error) || error.name === 'AbortError') {
       const e = new Error('Request canceled');
@@ -68,9 +75,43 @@ export const fetchTenders = async ({
     const status = error.response?.status;
     const isServerError = !status || status >= 500;
 
-    // ── Client-side fallback: use the bundled 01112025.json snapshot ─────────
+    // ── Client-side fallback chain ────────────────────────────────────────────
     if (isServerError) {
-      console.warn('⚠️ [api.js] eTenders server error — using bundled fallback snapshot (01112025.json)');
+      // 1️⃣ Try Supabase daily cache (shared, rolling 2-day window)
+      // 2️⃣ Try localStorage daily cache (this device, rolling 2-day window)
+      try {
+        const cached = await getLatestDailySnapshot();
+        if (cached && Array.isArray(cached.tenders) && cached.tenders.length > 0) {
+          console.warn(
+            `⚠️ [api.js] eTenders unavailable — using daily cache from ${cached.date} (${cached.source})`
+          );
+          const releases = cached.tenders;
+          const filtered = search
+            ? releases.filter(r => {
+                const q = search.toLowerCase();
+                return (
+                  r.tender?.title?.toLowerCase().includes(q) ||
+                  r.tender?.description?.toLowerCase().includes(q) ||
+                  r.buyer?.name?.toLowerCase().includes(q) ||
+                  r.tender?.procuringEntity?.name?.toLowerCase().includes(q)
+                );
+              })
+            : releases;
+          return {
+            results:     filtered,
+            total:       filtered.length,
+            isFallback:  true,
+            fallbackMsg: `eTenders is currently unavailable. Showing cached tenders from ${cached.date}.`,
+            fallbackSource: cached.source,
+            fallbackDate:   cached.date,
+          };
+        }
+      } catch (cacheErr) {
+        console.warn('[api.js] Daily cache lookup failed:', cacheErr.message);
+      }
+
+      // 3️⃣ Last resort: bundled static 01112025.json snapshot
+      console.warn('⚠️ [api.js] No daily cache available — using bundled static snapshot (01112025.json)');
       const releases = fallbackSnapshot.Releases || [];
       const filtered = search
         ? releases.filter(r => {
@@ -84,10 +125,12 @@ export const fetchTenders = async ({
           })
         : releases;
       return {
-        results:     filtered,
-        total:       filtered.length,
-        isFallback:  true,
-        fallbackMsg: 'eTenders is currently unavailable. Showing cached tenders.',
+        results:        filtered,
+        total:          filtered.length,
+        isFallback:     true,
+        fallbackMsg:    'eTenders is currently unavailable. Showing cached tenders.',
+        fallbackSource: 'static',
+        fallbackDate:   null,
       };
     }
 

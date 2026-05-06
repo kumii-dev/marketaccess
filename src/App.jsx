@@ -28,7 +28,7 @@ function App() {
   const [loadingStatus, setLoadingStatus] = useState('Fetching latest tenders...');
   const [loadingSubStatus, setLoadingSubStatus] = useState('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [fallbackNotice, setFallbackNotice] = useState(''); // set when static snapshot is used
+  const [fallbackNotice, setFallbackNotice] = useState(''); // set when daily/static cache is used
   const [filters, setFilters] = useState({
     search: '',
     province: '',
