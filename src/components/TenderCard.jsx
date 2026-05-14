@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   getTenderTitle, 
   getTenderDescription, 
@@ -8,9 +8,10 @@ import {
 import TenderDetailsModal from './TenderDetailsModal';
 import TenderResponseModal from './TenderResponseModal';
 import { logTenderView } from '../utils/auditLogger';
+import { supabase } from '../lib/supabase';
 import './TenderCard.css';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+const API_BASE = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || (import.meta.env.DEV ? 'http://localhost:3001' : '');
 
 const TenderCard = ({ tender, userProfile }) => {
   const [showDocuments, setShowDocuments] = useState(false);
@@ -20,6 +21,19 @@ const TenderCard = ({ tender, userProfile }) => {
   const [draftData, setDraftData] = useState(null);
   const [draftMeta, setDraftMeta] = useState(null);
   const [showDraftModal, setShowDraftModal] = useState(false);
+  const [sessionUserEmail, setSessionUserEmail] = useState(null);
+
+  // Read the logged-in user's email from the Supabase session so the AI
+  // draft can be attributed correctly even when no userProfile prop is passed.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) setSessionUserEmail(session.user.email);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSessionUserEmail(session?.user?.email || null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
   
   const title = getTenderTitle(tender);
   const description = getTenderDescription(tender);
@@ -143,9 +157,13 @@ const TenderCard = ({ tender, userProfile }) => {
           tender: tenderPayload,
           documentText,
           userProfile: userProfile || null,
-          userEmail: userProfile?.email || null
+          userEmail: userProfile?.email || sessionUserEmail || null
         })
-      });
+      }).catch(() => null); // network-level failure (server unreachable)
+
+      if (!aiRes) {
+        throw new Error('The AI server is currently unreachable. Please check your connection and try again.');
+      }
 
       if (!aiRes.ok) {
         const err = await aiRes.json().catch(() => ({}));

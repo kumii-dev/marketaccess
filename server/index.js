@@ -3,6 +3,16 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
+import { createRequire } from 'module';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
+const _require   = createRequire(import.meta.url);
+
+// 📦 Static fallback snapshot — served when eTenders gov API is unavailable
+const FALLBACK_SNAPSHOT = _require(path.join(__dirname, '../src/etender/01112025.json'));
 import { 
   generalApiLimiter, 
   authLimiter, // TODO: Apply to /api/auth/* endpoints when implemented
@@ -142,9 +152,27 @@ app.get('/api/tenders', async (req, res) => {
     }
 
     if (!apiResponse || apiResponse.status !== 200) {
-      return res.status(503).json({
-        error: 'eTenders API unavailable',
-        message: 'The eTenders portal is currently experiencing technical difficulties.',
+      // ── Static fallback: serve the 01112025.json snapshot ─────────────────
+      console.warn('⚠️ All eTenders API attempts failed — serving static fallback snapshot (01112025.json)');
+      const fallbackReleases = FALLBACK_SNAPSHOT.Releases || [];
+      const fallbackFiltered = search
+        ? fallbackReleases.filter(r => {
+            const q = search.toLowerCase();
+            return (
+              r.tender?.title?.toLowerCase().includes(q) ||
+              r.tender?.description?.toLowerCase().includes(q) ||
+              r.buyer?.name?.toLowerCase().includes(q) ||
+              r.tender?.procuringEntity?.name?.toLowerCase().includes(q)
+            );
+          })
+        : fallbackReleases;
+      return res.json({
+        results:     fallbackFiltered,
+        total:       fallbackFiltered.length,
+        dateFrom:    FALLBACK_SNAPSHOT.PublishedDate || null,
+        dateTo:      FALLBACK_SNAPSHOT.PublishedDate || null,
+        isFallback:  true,
+        fallbackMsg: 'eTenders is currently unavailable. Showing cached tenders.',
       });
     }
 
