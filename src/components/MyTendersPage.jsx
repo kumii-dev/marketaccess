@@ -24,13 +24,101 @@ function formatDate(iso) {
   }
 }
 
+/** Days remaining until a closing date. Returns null if no date. */
+function daysRemaining(dateStr) {
+  if (!dateStr) return null;
+  try {
+    const diff = new Date(dateStr) - new Date();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  } catch { return null; }
+}
+
+/** Urgency colour class based on days remaining */
+function urgencyClass(days) {
+  if (days === null) return '';
+  if (days < 0)  return 'mtp-urgency--expired';
+  if (days <= 3) return 'mtp-urgency--critical';
+  if (days <= 7) return 'mtp-urgency--warning';
+  return 'mtp-urgency--ok';
+}
+
+/** % of AI draft sections that are non-empty */
+function draftCompleteness(row) {
+  const sections = [
+    row.executive_summary,
+    row.company_overview,
+    row.technical_approach,
+    row.team_capability,
+    row.pricing_narrative,
+  ];
+  const jsonSections = [
+    Array.isArray(row.compliance_items) ? row.compliance_items : [],
+    Array.isArray(row.key_requirements)  ? row.key_requirements  : [],
+  ];
+  const filled = sections.filter(s => s && s.trim().length > 0).length
+               + jsonSections.filter(a => a.length > 0).length;
+  return Math.round((filled / (sections.length + jsonSections.length)) * 100);
+}
+
 export default function MyTendersPage({ onBack }) {
   const [rows, setRows]           = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
   const [filter, setFilter]       = useState('all');
-  const [deleting, setDeleting]   = useState(null); // id of row being deleted
-  const [openDraft, setOpenDraft] = useState(null);  // { row } to reopen modal
+  const [deleting, setDeleting]   = useState(null);
+  const [openDraft, setOpenDraft] = useState(null);
+
+  // ── Profile context from SmartMatchedTenders data ─────────────────────────
+  // Reads the same ai_keyword_cache that SmartMatchedTenders writes to, giving
+  // MyTendersPage awareness of what keywords are driving the user's matches.
+  const [profileCtx, setProfileCtx] = useState({
+    displayName: '',
+    companyName: '',
+    keywords: [],     // from ai_keyword_cache — same keywords used for matching
+    keywordsLoaded: false,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfileCtx() {
+      try {
+        // Get user from session
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user || cancelled) return;
+
+        const displayName = user.user_metadata?.full_name
+          || user.user_metadata?.name
+          || user.email?.split('@')[0]
+          || '';
+        const companyName = user.user_metadata?.company_name || '';
+
+        if (!cancelled) setProfileCtx(p => ({ ...p, displayName, companyName }));
+
+        // Pull AI keywords from the cache SmartMatchedTenders wrote
+        const { data: cache } = await supabase
+          .from('ai_keyword_cache')
+          .select('keywords')
+          .eq('user_id', user.id)
+          .order('last_used_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!cancelled && cache?.keywords?.length) {
+          setProfileCtx(p => ({
+            ...p,
+            keywords: cache.keywords.slice(0, 12), // cap at 12 pills
+            keywordsLoaded: true,
+          }));
+        } else if (!cancelled) {
+          setProfileCtx(p => ({ ...p, keywordsLoaded: true }));
+        }
+      } catch { /* non-fatal */ }
+    }
+
+    loadProfileCtx();
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Email subscription ────────────────────────────────────────────────────
   const {
@@ -131,9 +219,62 @@ export default function MyTendersPage({ onBack }) {
         <button className="mtp-back-btn" onClick={onBack}>
           <i className="bi bi-arrow-left"></i> Back
         </button>
-        <h1 className="mtp-title">My Tender Drafts</h1>
-        <p className="mtp-subtitle">Your saved AI-drafted tender responses</p>
+        <div className="mtp-header-row">
+          <div>
+            <h1 className="mtp-title">
+              My Tender Drafts
+              {profileCtx.companyName && (
+                <span className="mtp-title-company"> · {profileCtx.companyName}</span>
+              )}
+            </h1>
+            <p className="mtp-subtitle">
+              {profileCtx.displayName
+                ? `${profileCtx.displayName}'s AI-drafted tender responses`
+                : 'Your saved AI-drafted tender responses'}
+            </p>
+          </div>
+          {rows.length > 0 && (
+            <div className="mtp-header-stats">
+              <div className="mtp-stat">
+                <span className="mtp-stat__value">{rows.length}</span>
+                <span className="mtp-stat__label">Total</span>
+              </div>
+              <div className="mtp-stat">
+                <span className="mtp-stat__value">
+                  {rows.filter(r => r.status === 'submitted').length}
+                </span>
+                <span className="mtp-stat__label">Submitted</span>
+              </div>
+              <div className="mtp-stat">
+                <span className="mtp-stat__value">
+                  {rows.filter(r => {
+                    const d = daysRemaining(r.closing_date);
+                    return d !== null && d >= 0 && d <= 7;
+                  }).length}
+                </span>
+                <span className="mtp-stat__label">Closing Soon</span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* ── Active match keywords from SmartMatchedTenders AI cache ───────── */}
+      {profileCtx.keywords.length > 0 && (
+        <div className="mtp-keywords-banner">
+          <span className="mtp-keywords-banner__label">
+            <i className="bi bi-cpu"></i> Active match keywords
+          </span>
+          <div className="mtp-keywords-banner__pills">
+            {profileCtx.keywords.map((kw, i) => (
+              <span key={i} className="mtp-kw-pill">{kw}</span>
+            ))}
+          </div>
+          <span className="mtp-keywords-banner__hint">
+            These keywords drive your Smart Match scores
+          </span>
+        </div>
+      )}
 
       {/* Filter bar */}
       <div className="mtp-filter-bar">
@@ -180,53 +321,91 @@ export default function MyTendersPage({ onBack }) {
 
       {!loading && !error && filtered.length > 0 && (
         <div className="mtp-grid">
-          {filtered.map(row => (
+          {filtered.map(row => {
+            const days       = daysRemaining(row.closing_date);
+            const urgCls     = urgencyClass(days);
+            const completePct = draftCompleteness(row);
+            const hasScore   = row.match_percentage != null;
+
+            return (
             <div key={row.id} className="mtp-card">
               <div className="mtp-card-header">
                 <StatusBadge status={row.status} />
                 {row.document_analyzed && (
                   <span className="mtp-doc-badge">Doc Analysed</span>
                 )}
+                {/* Match % badge — data from SmartMatchedTenders scoring */}
+                {hasScore && (
+                  <span className={`mtp-match-badge ${row.match_percentage >= 70 ? 'mtp-match-badge--high' : row.match_percentage >= 40 ? 'mtp-match-badge--mid' : 'mtp-match-badge--low'}`}>
+                    {row.match_percentage}% match
+                  </span>
+                )}
               </div>
 
               <h3 className="mtp-card-title">{row.tender_title}</h3>
 
               {row.organ_of_state && (
-                <p className="mtp-card-buyer">{row.organ_of_state}</p>
+                <p className="mtp-card-buyer">
+                  <i className="bi bi-building"></i> {row.organ_of_state}
+                </p>
               )}
 
+              {/* Closing date with urgency chip */}
               {row.closing_date && (
-                <p className="mtp-card-date">Closing: {row.closing_date.split('T')[0]}</p>
+                <p className={`mtp-card-date ${urgCls}`}>
+                  {days === null ? null
+                    : days < 0  ? <><i className="bi bi-x-circle-fill"></i> Expired</>
+                    : days === 0 ? <><i className="bi bi-exclamation-circle-fill"></i> Closes today!</>
+                    : days <= 3 ? <><i className="bi bi-exclamation-triangle-fill"></i> {days}d left</>
+                    : days <= 7 ? <><i className="bi bi-clock-fill"></i> {days}d left</>
+                    : <><i className="bi bi-calendar3"></i> {days}d left</>
+                  }
+                  <span className="mtp-card-date__raw">
+                    &nbsp;· {row.closing_date.split('T')[0]}
+                  </span>
+                </p>
               )}
+
+              {/* Draft completeness progress bar */}
+              <div className="mtp-completeness">
+                <div className="mtp-completeness__bar">
+                  <div
+                    className="mtp-completeness__fill"
+                    style={{ width: `${completePct}%` }}
+                  />
+                </div>
+                <span className="mtp-completeness__label">{completePct}% complete</span>
+              </div>
 
               {row.executive_summary && (
                 <p className="mtp-card-excerpt">
-                  {row.executive_summary.substring(0, 160)}{row.executive_summary.length > 160 ? '…' : ''}
+                  {row.executive_summary.substring(0, 140)}{row.executive_summary.length > 140 ? '…' : ''}
                 </p>
               )}
 
               <p className="mtp-card-meta">
-                Last updated {formatDate(row.updated_at)}
-                {row.tokens_used ? ` · ${row.tokens_used} tokens` : ''}
+                Updated {formatDate(row.updated_at)}
+                {row.tokens_used ? ` · ${row.tokens_used.toLocaleString()} tokens` : ''}
               </p>
 
-      <div className="mtp-card-actions">
+              <div className="mtp-card-actions">
                 <button
                   className="mtp-btn mtp-btn-primary"
                   onClick={() => setOpenDraft({ row })}
                 >
-                  Open Draft
+                  <i className="bi bi-pencil-square"></i> Open Draft
                 </button>
                 <button
                   className="mtp-btn mtp-btn-danger"
                   onClick={() => handleDelete(row)}
                   disabled={deleting === row.id}
                 >
-                  {deleting === row.id ? 'Deleting…' : 'Delete'}
+                  {deleting === row.id ? 'Deleting…' : <><i className="bi bi-trash3"></i> Delete</>}
                 </button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -328,6 +507,13 @@ export default function MyTendersPage({ onBack }) {
                 Minimum match score
                 <span className="mtp-score-badge">{minScore}%</span>
               </label>
+              {profileCtx.keywords.length > 0 && (
+                <p className="mtp-score-context">
+                  <i className="bi bi-info-circle"></i> Based on your{' '}
+                  <strong>{profileCtx.keywords.length} active keywords</strong>,
+                  tenders scored {minScore}%+ are strong profile matches.
+                </p>
+              )}
               <div className="mtp-score-slider-wrap">
                 <input
                   id="sub-score"
