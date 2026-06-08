@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import TenderResponseModal from './TenderResponseModal';
+import { useEmailSubscription } from '../hooks/useEmailSubscription';
 import './MyTendersPage.css';
 
 const STATUS_LABELS = {
@@ -30,6 +31,34 @@ export default function MyTendersPage({ onBack }) {
   const [filter, setFilter]       = useState('all');
   const [deleting, setDeleting]   = useState(null); // id of row being deleted
   const [openDraft, setOpenDraft] = useState(null);  // { row } to reopen modal
+
+  // ── Email subscription ────────────────────────────────────────────────────
+  const {
+    subscription, loading: subLoading, saving: subSaving,
+    testSending, error: subError, successMsg,
+    save: saveSub, unsubscribe, sendTest,
+  } = useEmailSubscription();
+
+  // Local form state for the email panel — seeded from subscription once loaded
+  const [userEmail, setUserEmail]   = useState('');
+  const [frequency, setFrequency]   = useState('weekly');
+  const [minScore, setMinScore]     = useState(40);
+  const [subEnabled, setSubEnabled] = useState(true);
+
+  // Seed form from loaded subscription
+  useEffect(() => {
+    if (subscription) {
+      setUserEmail(subscription.email   || '');
+      setFrequency(subscription.frequency || 'weekly');
+      setMinScore(subscription.min_score  ?? 40);
+      setSubEnabled(subscription.enabled ?? true);
+    } else if (!subLoading) {
+      // Not subscribed yet — pre-fill email from Supabase session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user?.email) setUserEmail(session.user.email);
+      });
+    }
+  }, [subscription, subLoading]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,6 +243,166 @@ export default function MyTendersPage({ onBack }) {
           onSaved={() => { load(); }}
         />
       )}
+
+      {/* ── Email Alerts Panel ────────────────────────────────────────── */}
+      <div className="mtp-email-panel">
+        <div className="mtp-email-panel__header">
+          <i className="bi bi-envelope-check"></i>
+          <div>
+            <h2 className="mtp-email-panel__title">Smart Match Email Alerts</h2>
+            <p className="mtp-email-panel__subtitle">
+              Receive a digest of tenders matched above your score threshold, delivered on your schedule.
+            </p>
+          </div>
+        </div>
+
+        {subLoading ? (
+          <div className="mtp-loading" style={{ padding: '24px 0' }}>
+            <span className="mtp-spinner" /> <span>Loading preferences…</span>
+          </div>
+        ) : (
+          <form
+            className="mtp-email-form"
+            onSubmit={e => {
+              e.preventDefault();
+              saveSub({ email: userEmail, frequency, minScore, enabled: subEnabled });
+            }}
+          >
+            {/* Enable toggle */}
+            <div className="mtp-email-row mtp-email-row--toggle">
+              <label className="mtp-email-label" htmlFor="sub-enabled">
+                Enable email alerts
+              </label>
+              <button
+                type="button"
+                id="sub-enabled"
+                role="switch"
+                aria-checked={subEnabled}
+                className={`mtp-toggle${subEnabled ? ' mtp-toggle--on' : ''}`}
+                onClick={() => setSubEnabled(v => !v)}
+              >
+                <span className="mtp-toggle__thumb" />
+              </button>
+            </div>
+
+            {/* Email address */}
+            <div className="mtp-email-row">
+              <label className="mtp-email-label" htmlFor="sub-email">Deliver to</label>
+              <input
+                id="sub-email"
+                type="email"
+                className="mtp-email-input"
+                value={userEmail}
+                onChange={e => setUserEmail(e.target.value)}
+                placeholder="your@email.com"
+                required
+                disabled={!subEnabled}
+              />
+            </div>
+
+            {/* Frequency */}
+            <div className="mtp-email-row">
+              <label className="mtp-email-label">Frequency</label>
+              <div className="mtp-freq-group">
+                {[
+                  { value: 'daily',  label: 'Daily',  desc: 'Every morning at 7 am' },
+                  { value: 'weekly', label: 'Weekly', desc: 'Every Monday at 7 am'  },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    className={`mtp-freq-btn${frequency === opt.value ? ' mtp-freq-btn--active' : ''}`}
+                    onClick={() => setFrequency(opt.value)}
+                    disabled={!subEnabled}
+                  >
+                    <span className="mtp-freq-btn__label">{opt.label}</span>
+                    <span className="mtp-freq-btn__desc">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Minimum score */}
+            <div className="mtp-email-row">
+              <label className="mtp-email-label" htmlFor="sub-score">
+                Minimum match score
+                <span className="mtp-score-badge">{minScore}%</span>
+              </label>
+              <div className="mtp-score-slider-wrap">
+                <input
+                  id="sub-score"
+                  type="range"
+                  min="10" max="90" step="5"
+                  value={minScore}
+                  onChange={e => setMinScore(Number(e.target.value))}
+                  className="mtp-score-slider"
+                  disabled={!subEnabled}
+                />
+                <div className="mtp-score-ticks">
+                  {[10, 25, 40, 55, 70, 90].map(v => (
+                    <span key={v} style={{ left: `${((v - 10) / 80) * 100}%` }}>{v}%</span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Feedback messages */}
+            {subError && (
+              <p className="mtp-email-msg mtp-email-msg--error">
+                <i className="bi bi-exclamation-triangle-fill"></i> {subError}
+              </p>
+            )}
+            {successMsg && (
+              <p className="mtp-email-msg mtp-email-msg--success">
+                {successMsg}
+              </p>
+            )}
+
+            {/* Actions */}
+            <div className="mtp-email-actions">
+              <button
+                type="submit"
+                className="mtp-btn mtp-btn-primary"
+                disabled={subSaving}
+                style={{ minWidth: 140 }}
+              >
+                {subSaving ? 'Saving…' : subscription ? 'Update Preferences' : 'Subscribe'}
+              </button>
+
+              <button
+                type="button"
+                className="mtp-btn mtp-btn-secondary"
+                disabled={testSending || !userEmail}
+                onClick={() => sendTest({ email: userEmail, minScore, frequency })}
+                title="Send a test digest to your email now"
+              >
+                {testSending ? (
+                  <><span className="mtp-spinner mtp-spinner--sm" /> Sending…</>
+                ) : (
+                  <><i className="bi bi-send"></i> Send Now</>
+                )}
+              </button>
+
+              {subscription?.enabled && (
+                <button
+                  type="button"
+                  className="mtp-btn mtp-btn-ghost"
+                  onClick={unsubscribe}
+                  disabled={subSaving}
+                >
+                  Unsubscribe
+                </button>
+              )}
+            </div>
+
+            {subscription?.last_sent_at && (
+              <p className="mtp-email-last-sent">
+                <i className="bi bi-clock"></i> Last digest sent: {formatDate(subscription.last_sent_at)}
+              </p>
+            )}
+          </form>
+        )}
+      </div>
     </div>
   );
 }

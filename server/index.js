@@ -3,6 +3,7 @@ dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import axios from 'axios';
+import cron from 'node-cron';
 import { createRequire } from 'module';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -22,6 +23,7 @@ import aiRoutes from './routes/ai.js';
 import auditRoutes from './routes/audit.js';
 import auditAIRoutes from './routes/auditAI.js';
 import tenderDocsRouter from './routes/tenderDocs.js';
+import emailRoutes, { dispatchDigest } from './routes/email.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -48,7 +50,10 @@ app.use('/api/ai/audit', auditAIRoutes);
 // 📄 TENDER DOCS: Server-side document fetch + text extraction
 app.use('/api/tenders', tenderDocsRouter);
 
-// 📊 AUDIT: Mount audit log receiver — ISO 27001, NIST SP 800-53, OWASP
+// � EMAIL: Subscription management + digest dispatch
+app.use('/api/email', emailRoutes);
+
+// �📊 AUDIT: Mount audit log receiver — ISO 27001, NIST SP 800-53, OWASP
 app.use('/admin/audit-logs', auditRoutes);
 
 // Print cost estimates on startup
@@ -209,3 +214,44 @@ app.get('/api/tenders', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
+
+// ── Email digest cron jobs ────────────────────────────────────────────────────
+// SAST = UTC+2.  "7 5 * * *" = 07:00 SAST (05:00 UTC) every day.
+// Weekly digest fires on Mondays only (day-of-week = 1).
+
+import { createClient as _createAdminClient } from '@supabase/supabase-js';
+
+async function runDigestCron(frequency) {
+  const admin = _createAdminClient(
+    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
+    { auth: { persistSession: false } }
+  );
+
+  const { data: subs, error } = await admin
+    .from('email_subscriptions')
+    .select('user_id, email, min_score, frequency')
+    .eq('enabled', true)
+    .eq('frequency', frequency);
+
+  if (error) { console.error(`[cron] Failed to fetch ${frequency} subscribers:`, error.message); return; }
+  if (!subs?.length) { console.log(`[cron] No ${frequency} subscribers`); return; }
+
+  console.log(`[cron] Dispatching ${frequency} digest to ${subs.length} subscriber(s)…`);
+  for (const sub of subs) {
+    await dispatchDigest({
+      userId:    sub.user_id,
+      email:     sub.email,
+      minScore:  sub.min_score,
+      frequency: sub.frequency,
+    });
+  }
+}
+
+// Daily: every day at 07:00 SAST (05:00 UTC)
+cron.schedule('0 5 * * *', () => runDigestCron('daily'),  { timezone: 'UTC' });
+
+// Weekly: every Monday at 07:00 SAST (05:00 UTC)
+cron.schedule('0 5 * * 1', () => runDigestCron('weekly'), { timezone: 'UTC' });
+
+console.log('📧 Email digest scheduler started (daily 07:00 SAST | weekly Mon 07:00 SAST)');
