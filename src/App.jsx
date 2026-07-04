@@ -246,8 +246,16 @@ function App() {
             console.warn('⚠️ Background Supabase save failed:', err.message);
           });
 
-          // Silently swap in the fresher data if the set changed since first paint.
-          setAllTenders(prev => (freshTenders.length !== prev.length ? freshTenders : prev));
+          // Swap in fresh data when: count changed, or the fresh set has more
+          // province data than the currently-displayed set (covers the case where
+          // IDB cache had province-less data from before the active-tenders store
+          // was populated — ensures province filtering works after first load).
+          setAllTenders(prev => {
+            if (freshTenders.length !== prev.length) return freshTenders;
+            const prevProvinceCount = prev.filter(t => t.tender?.province).length;
+            const freshProvinceCount = freshTenders.filter(t => t.tender?.province).length;
+            return freshProvinceCount > prevProvinceCount ? freshTenders : prev;
+          });
 
           console.log('✅ Background refresh complete:', freshTenders.length, 'tenders');
         } else {

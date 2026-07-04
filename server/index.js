@@ -24,7 +24,18 @@ import auditRoutes from './routes/audit.js';
 import auditAIRoutes from './routes/auditAI.js';
 import tenderDocsRouter from './routes/tenderDocs.js';
 import emailRoutes, { dispatchDigest } from './routes/email.js';
-import { syncActiveTenders, getActiveTenders, getSyncStatus } from './services/tenderSync.js';
+import { syncActiveTenders, getActiveTenders, getSyncStatus, inferProvince } from './services/tenderSync.js';
+
+// ── Province enrichment ───────────────────────────────────────────────────────
+// The eTenders OCDS API omits a `tender.province` field.  This helper derives
+// it from `buyer.name` and injects it so client-side province filters work.
+function enrichWithProvince(release) {
+  if (!release) return release;
+  if (release.tender?.province) return release; // already set
+  const prov = inferProvince(release.buyer?.name);
+  if (!prov) return release;
+  return { ...release, tender: { ...release.tender, province: prov } };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -196,7 +207,7 @@ app.get('/api/tenders', async (req, res) => {
     if (!apiResponse || apiResponse.status !== 200) {
       // ── Static fallback: serve the 01112025.json snapshot ─────────────────
       console.warn('⚠️ All eTenders API attempts failed — serving static fallback snapshot (01112025.json)');
-      const fallbackReleases = FALLBACK_SNAPSHOT.Releases || [];
+      const fallbackReleases = (FALLBACK_SNAPSHOT.Releases || []).map(enrichWithProvince);
       const fallbackFiltered = search
         ? fallbackReleases.filter(r => {
             const q = search.toLowerCase();
@@ -218,7 +229,7 @@ app.get('/api/tenders', async (req, res) => {
       });
     }
 
-    const releases = apiResponse.data?.releases || [];
+    const releases = (apiResponse.data?.releases || []).map(enrichWithProvince);
 
     const filtered = search
       ? releases.filter(r => {

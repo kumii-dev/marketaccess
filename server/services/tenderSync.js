@@ -36,6 +36,40 @@ const LOOKBACK_DAYS      = Number(process.env.TENDER_SYNC_LOOKBACK_DAYS || 60);
 const REQUEST_TIMEOUT_MS = 120000; // 2 min — the gov API can be very slow
 const UPSERT_CHUNK       = 500;
 
+// ── Province inference ────────────────────────────────────────────────────────
+// The eTenders OCDS API does NOT include a `tender.province` field. Province is
+// encoded only as a prefix in `buyer.name` (e.g. "Limpopo - Social Development",
+// "Gauteng - Infrastructure Development").  We normalise those prefixes to the
+// official 9 SA province names so the client-side province filter works.
+
+const PROVINCE_PREFIXES = [
+  ['eastern cape',   'Eastern Cape'],
+  ['free state',     'Free State'],
+  ['gauteng',        'Gauteng'],
+  ['kwazulu-natal',  'KwaZulu-Natal'],
+  ['kwazulu natal',  'KwaZulu-Natal'],
+  ['kwa-zulu natal', 'KwaZulu-Natal'],
+  ['limpopo',        'Limpopo'],
+  ['mpumalanga',     'Mpumalanga'],
+  ['north west',     'North West'],
+  ['northern cape',  'Northern Cape'],
+  ['western cape',   'Western Cape'],
+];
+
+/**
+ * Infer the SA province from a buyer name string.
+ * Returns a normalised province name (e.g. "KwaZulu-Natal") or null for
+ * national / non-provincial departments that have no province prefix.
+ */
+export function inferProvince(buyerName) {
+  if (!buyerName) return null;
+  const lower = buyerName.toLowerCase().trim();
+  for (const [prefix, normalized] of PROVINCE_PREFIXES) {
+    if (lower.startsWith(prefix)) return normalized;
+  }
+  return null;
+}
+
 // ── Supabase admin client (lazy) ──────────────────────────────────────────────
 let _admin = null;
 function getAdmin() {
@@ -145,7 +179,8 @@ function toRow(r) {
     title:          r.tender?.title || null,
     buyer_name:     r.buyer?.name || r.tender?.procuringEntity?.name || null,
     category:       r.tender?.mainProcurementCategory || r.tender?.category || null,
-    province:       r.tender?.province || null,
+    // Province is not a field in the OCDS spec — derive it from buyer.name.
+    province:       r.tender?.province || inferProvince(r?.buyer?.name) || null,
     status:         r.tender?.status || 'active',
     closing_date:   r.tender?.tenderPeriod?.endDate || null,
     published_date: r.date || null,
@@ -243,7 +278,7 @@ export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
 
   const { data, error } = await admin
     .from('active_tenders')
-    .select('release, closing_date, synced_at')
+    .select('release, province, closing_date, synced_at')
     .order('closing_date', { ascending: true }) // closing soonest first; nulls last
     .limit(limit);
 
@@ -256,7 +291,17 @@ export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
     row => !row.closing_date || new Date(row.closing_date).getTime() >= now
   );
 
-  let releases = rows.map(row => row.release).filter(Boolean);
+  // Inject province into release.tender.province so FilterBar / App.jsx filters
+  // work without changes (the OCDS API omits this field; we derived it at sync
+  // time from buyer.name and stored it in the province column).
+  let releases = rows.map(row => {
+    if (!row.release) return null;
+    const prov = row.province || inferProvince(row.release?.buyer?.name);
+    if (prov && !row.release.tender?.province) {
+      return { ...row.release, tender: { ...row.release.tender, province: prov } };
+    }
+    return row.release;
+  }).filter(Boolean);
 
   if (search) {
     const q = search.toLowerCase();
