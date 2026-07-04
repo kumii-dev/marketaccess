@@ -45,6 +45,44 @@ export const fetchTenders = async ({
     return { results: filtered.slice(0, 50), total: filtered.length };
   }
 
+  // ── Supabase-backed active-tenders store (primary, fast, decoupled) ────────
+  // The server refreshes this table hourly via a background cron, so a normal
+  // page load reads pre-filtered data straight from Supabase instead of hitting
+  // the slow / unreliable gov API. This keeps upstream API calls flat as the
+  // platform scales. Only the primary "load everything" call uses it — legacy
+  // paged/offset callers still go straight to the live proxy below.
+  if (page == null && offset == null) {
+    try {
+      const activeCfg = { params: {} };
+      if (search) activeCfg.params.search = search;
+      if (signal) activeCfg.signal = signal;
+
+      const activeRes = await axios.get(`${API_BASE_URL}/api/active-tenders`, activeCfg);
+      const activeResults = activeRes.data?.results;
+
+      if (Array.isArray(activeResults) && activeResults.length > 0) {
+        // Keep the daily snapshot warm as a secondary offline fallback.
+        saveDailySnapshot(activeResults).catch(() => null);
+        return {
+          results:  activeResults,
+          total:    activeRes.data.total ?? activeResults.length,
+          source:   activeRes.data.source || 'supabase-active',
+          syncedAt: activeRes.data.syncedAt ?? null,
+        };
+      }
+      // Empty store (cold start before the first sync) → fall through to live API.
+      console.info('[api.js] active-tenders store empty — falling back to live API');
+    } catch (activeErr) {
+      // Propagate genuine cancellations; otherwise fall through to the live API.
+      if (axios.isCancel(activeErr) || activeErr.name === 'AbortError') {
+        const e = new Error('Request canceled');
+        e.name = 'AbortError';
+        throw e;
+      }
+      console.warn('[api.js] active-tenders store unavailable — using live API:', activeErr.message);
+    }
+  }
+
   // ── Live API call ─────────────────────────────────────────────────────────
   try {
     const params = {};

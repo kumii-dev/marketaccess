@@ -24,6 +24,7 @@ import auditRoutes from './routes/audit.js';
 import auditAIRoutes from './routes/auditAI.js';
 import tenderDocsRouter from './routes/tenderDocs.js';
 import emailRoutes, { dispatchDigest } from './routes/email.js';
+import { syncActiveTenders, getActiveTenders, getSyncStatus } from './services/tenderSync.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -76,6 +77,42 @@ rateLimitCostEstimate.printEstimate();
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// ── Active tenders (Supabase-backed, cron-populated) ──────────────────────────
+// FAST read path. The frontend hits this instead of the slow gov API. Data is
+// refreshed hourly by a background cron (see bottom of file), so ordinary user
+// page loads never trigger an upstream eTenders call — this keeps the number of
+// gov-API calls constant as the platform scales. Response is browser-cacheable.
+app.get('/api/active-tenders', async (req, res) => {
+  const { search = '' } = req.query;
+  try {
+    const { results, total, syncedAt } = await getActiveTenders({ search });
+    // Data only changes hourly → let browsers cache for 10 min, then revalidate.
+    res.set('Cache-Control', 'public, max-age=600, stale-while-revalidate=3600');
+    res.json({ results, total, source: 'supabase-active', syncedAt });
+  } catch (err) {
+    console.error('[active-tenders] read failed:', err.message);
+    // 503 (not 500) so the client fallback chain treats it as "try live API".
+    res.status(503).json({ error: 'active tenders unavailable', message: err.message });
+  }
+});
+
+// Lightweight freshness/status probe (public, no upstream calls).
+app.get('/api/active-tenders/status', (req, res) => {
+  res.json(getSyncStatus());
+});
+
+// Manual sync trigger — DISABLED unless SYNC_SECRET is set and matches the
+// x-sync-key header. Keeps fetching decoupled from ordinary users while still
+// allowing an operator to force a refresh (e.g. right after deploy).
+app.post('/api/active-tenders/sync', async (req, res) => {
+  const secret = process.env.SYNC_SECRET;
+  if (!secret || req.get('x-sync-key') !== secret) {
+    return res.status(403).json({ error: 'forbidden' });
+  }
+  const result = await syncActiveTenders({ trigger: 'manual-endpoint' });
+  res.json({ ok: !result?.error, ...result });
 });
 
 // Proxy endpoint for OCDS Releases API
@@ -255,3 +292,19 @@ cron.schedule('0 5 * * *', () => runDigestCron('daily'),  { timezone: 'UTC' });
 cron.schedule('0 5 * * 1', () => runDigestCron('weekly'), { timezone: 'UTC' });
 
 console.log('📧 Email digest scheduler started (daily 07:00 SAST | weekly Mon 07:00 SAST)');
+
+// ── Active-tenders background sync ────────────────────────────────────────────
+// Fetch every OPEN tender from the gov API once per hour and store it in
+// Supabase, pruning expired tenders in the same run. This is the ONLY thing that
+// calls the upstream eTenders API — user page loads read from Supabase instead.
+cron.schedule('0 * * * *', () => {
+  syncActiveTenders({ trigger: 'cron-hourly' });
+}, { timezone: 'UTC' });
+
+console.log('🗂️  Active-tenders sync scheduled (hourly, on the hour)');
+
+// Warm the store shortly after boot so there's data without waiting for the top
+// of the next hour. Delayed + non-blocking so it never holds up server start.
+setTimeout(() => {
+  syncActiveTenders({ trigger: 'startup' });
+}, 8000);

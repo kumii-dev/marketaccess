@@ -205,81 +205,61 @@ function App() {
   const totalPages = Math.ceil(filteredAndSortedTenders.length / itemsPerPage) || 1;
 
   // Background refresh function (stale-while-revalidate)
-  // This runs in the background without blocking the UI
+  // This runs in the background without blocking the UI.
+  //
+  // The server now keeps the Supabase `active_tenders` table fresh via an hourly
+  // background cron, so a "refresh" is just a single fast read of that pre-synced
+  // store (fetchTenders → /api/active-tenders) rather than many slow, unreliable
+  // gov-API calls. This keeps upstream API traffic flat as the platform scales.
   const fetchFreshDataInBackground = async (from, to) => {
-    // Run in background - wrap in setTimeout to prevent blocking
+    // Run in background - wrap in setTimeout to prevent blocking the UI thread
     setTimeout(async () => {
       try {
-        console.log('🔄 Background refresh: Fetching fresh data (non-blocking)...');
-        
-        // Fetch only first 3 batches (30 tenders) for faster refresh
-        // Full refresh happens on next cold load
-        const batches = [
-          { page: 1, limit: 10 },
-          { page: 2, limit: 10 },
-          { page: 3, limit: 10 },
-        ];
+        console.log('🔄 Background refresh: reading fresh tenders from the store...');
 
-        let allFreshTenders = [];
-        
-        // Add timeout protection for each batch (10 seconds max per batch)
-        for (const batch of batches) {
-          try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout per batch
-            
-            const batchData = await fetchTenders({
-              ...batch,
-              dateFrom: from,
-              dateTo: to,
-              signal: controller.signal
-            });
-            
-            clearTimeout(timeoutId);
+        // Single call — api.js prefers the pre-synced Supabase active-tenders
+        // table (fast, decoupled from the gov API). 15s guard just in case.
+        const controller = new AbortController();
+        const timeoutId  = setTimeout(() => controller.abort(), 15000);
 
-            let batchTenders = [];
-            if (batchData.results) {
-              batchTenders = batchData.results;
-            } else if (batchData.data) {
-              batchTenders = batchData.data;
-            } else if (Array.isArray(batchData)) {
-              batchTenders = batchData;
-            }
+        const freshData = await fetchTenders({
+          dateFrom: from,
+          dateTo:   to,
+          signal:   controller.signal,
+        });
 
-            allFreshTenders = [...allFreshTenders, ...batchTenders];
-            
-            // Shorter delay for background refresh
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-          } catch (batchErr) {
-            if (batchErr.name === 'AbortError') {
-              console.warn(`⚠️ Background batch ${batch.page} timeout - skipping remaining`);
-              break; // Stop trying if one batch times out
-            }
-            console.warn(`⚠️ Background batch ${batch.page} failed:`, batchErr.message);
-          }
-        }
+        clearTimeout(timeoutId);
+
+        const freshTenders = freshData?.results || freshData?.data
+          || (Array.isArray(freshData) ? freshData : []);
 
         // Only update caches if we got some data
-        if (allFreshTenders.length > 0) {
-          // Update all cache layers (best effort)
-          await saveTendersToIDB(allFreshTenders, from, to).catch(err => {
+        if (freshTenders.length > 0) {
+          // Refresh every local cache layer so the next cold load is instant.
+          await saveTendersToIDB(freshTenders, from, to).catch(err => {
             console.warn('⚠️ Background IndexedDB save failed:', err.message);
           });
-          
-          cacheTenders(allFreshTenders, from, to);
-          
-          saveTendersToSupabase(allFreshTenders, from, to).catch(err => {
+
+          cacheTenders(freshTenders, from, to);
+
+          saveTendersToSupabase(freshTenders, from, to).catch(err => {
             console.warn('⚠️ Background Supabase save failed:', err.message);
           });
 
-          console.log('✅ Background refresh complete:', allFreshTenders.length, 'tenders');
+          // Silently swap in the fresher data if the set changed since first paint.
+          setAllTenders(prev => (freshTenders.length !== prev.length ? freshTenders : prev));
+
+          console.log('✅ Background refresh complete:', freshTenders.length, 'tenders');
         } else {
-          console.warn('⚠️ Background refresh got no data - skipping cache update');
+          console.warn('⚠️ Background refresh got no data - keeping cached view');
         }
-        
+
       } catch (err) {
-        console.warn('⚠️ Background refresh failed:', err.message);
+        if (err.name === 'AbortError') {
+          console.warn('⚠️ Background refresh timed out - keeping cached view');
+        } else {
+          console.warn('⚠️ Background refresh failed:', err.message);
+        }
       }
     }, 0); // Run asynchronously without blocking
   };
@@ -612,7 +592,7 @@ function App() {
 
           <p className="app-description">
             Connect with funders, corporates, and buyers through our trusted ecosystem
-            powered by credit scoring, profiling, and intelligent matching.
+            powered by intelligent matching.
           </p>
           <div className="header-actions">
             <button className="header-btn header-btn-primary" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>
