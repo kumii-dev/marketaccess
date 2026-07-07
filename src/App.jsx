@@ -47,15 +47,10 @@ function App() {
 
   const itemsPerPage = 250;
 
-  // Calculate default date range (last 30 days)
-  useEffect(() => {
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
-    
-    setDateTo(today.toISOString().split('T')[0]);
-    setDateFrom(thirtyDaysAgo.toISOString().split('T')[0]);
-  }, []);
+  // NOTE: The From/To date range below is a CLIENT-SIDE publication-date filter
+  // over the full set of active tenders (see filteredAndSortedTenders). It is
+  // intentionally left EMPTY by default so the first paint shows ALL currently
+  // active tenders — not just a recent window. Users opt in to a narrower range.
 
   // PHASE -1: Sync Supabase cache on component mount (cross-device sync)
   useEffect(() => {
@@ -156,6 +151,30 @@ function App() {
       });
     }
 
+    // Apply published-date range filter (From / To) — client-side.
+    // The store holds ALL active tenders; this range narrows by the tender's
+    // advertise date (tenderPeriod.startDate). We deliberately do NOT use
+    // release.date — that is the OCDS "compiled" timestamp which is uniformly
+    // recent for every active record and therefore useless for filtering.
+    // Empty bounds = no restriction.
+    const pubDateOf = (tender) =>
+      tender.tender?.tenderPeriod?.startDate || tender.date || tender.tender?.datePublished || null;
+    if (dateFrom) {
+      const fromTime = new Date(dateFrom).getTime();
+      result = result.filter(tender => {
+        const published = pubDateOf(tender);
+        return published ? new Date(published).getTime() >= fromTime : false;
+      });
+    }
+    if (dateTo) {
+      // Include the entire "to" day (up to 23:59:59.999).
+      const toTime = new Date(dateTo).getTime() + (24 * 60 * 60 * 1000 - 1);
+      result = result.filter(tender => {
+        const published = pubDateOf(tender);
+        return published ? new Date(published).getTime() <= toTime : false;
+      });
+    }
+
     // Apply sorting
     result.sort((a, b) => {
       switch (filters.sortBy) {
@@ -193,7 +212,7 @@ function App() {
     });
 
     return result;
-  }, [allTenders, filters]);
+  }, [allTenders, filters, dateFrom, dateTo]);
 
   // Pagination
   const paginatedTenders = useMemo(() => {
@@ -272,7 +291,7 @@ function App() {
     }, 0); // Run asynchronously without blocking
   };
 
-  const loadTenders = async (from, to) => {
+  const loadTenders = async (from = '', to = '') => {
     // Cancel any in-flight request
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -476,12 +495,14 @@ function App() {
     }
   };
 
-  // Initial load when date range is set
+  // Initial load — fetch ALL active tenders once from the Supabase store.
+  // The From/To date range is now a client-side filter (see
+  // filteredAndSortedTenders), so changing it no longer refetches — filtering is
+  // instant. Data is loaded a single time on mount.
   useEffect(() => {
-    if (dateFrom && dateTo) {
-      loadTenders(dateFrom, dateTo);
-    }
-  }, [dateFrom, dateTo]);
+    loadTenders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleFilterChange = (newFilters) => {
     setFilters(prev => ({ ...prev, ...newFilters }));
@@ -508,6 +529,7 @@ function App() {
   const handleDateRangeChange = (newDateFrom, newDateTo) => {
     setDateFrom(newDateFrom);
     setDateTo(newDateTo);
+    setCurrentPage(1); // Reset to page 1 — the visible result set changes
   };
 
   const handlePageChange = (page) => {
@@ -526,9 +548,7 @@ function App() {
   };
 
   const handleRetry = () => {
-    if (dateFrom && dateTo) {
-      loadTenders(dateFrom, dateTo);
-    }
+    loadTenders();
   };
 
   const handleSectionChange = (section) => {
@@ -599,8 +619,7 @@ function App() {
           <h1 className="app-title">Access To Market</h1>
 
           <p className="app-description">
-            Connect with funders, corporates, and buyers through our trusted ecosystem
-            powered by intelligent matching.
+            Find relevant tenders, buyer opportunities and procurement programmes matched to your business profile, sector and capabilities.
           </p>
           <div className="header-actions">
             <button className="header-btn header-btn-primary" onClick={() => window.scrollTo({ top: 400, behavior: 'smooth' })}>

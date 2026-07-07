@@ -32,7 +32,16 @@ import { createClient } from '@supabase/supabase-js';
 const OCDS_BASE_URL      = 'https://ocds-api.etenders.gov.za/api/OCDSReleases';
 const PAGE_SIZE          = Number(process.env.TENDER_SYNC_PAGE_SIZE     || 1000);
 const MAX_PAGES          = Number(process.env.TENDER_SYNC_MAX_PAGES     || 50);
-const LOOKBACK_DAYS      = Number(process.env.TENDER_SYNC_LOOKBACK_DAYS || 60);
+// Publication-date lookback window. The eTenders OCDS API's dateFrom/dateTo
+// filter by a tender's advertise/publication date (tender.tenderPeriod.startDate),
+// NOT its closing date. A tender still open today was advertised at most ~120 days
+// ago (SA tender periods rarely exceed this), so 120 days captures essentially all
+// currently-open tenders — with headroom for the occasional long-running tender —
+// while keeping the page count low enough to complete on the slow/flaky gov server.
+// isOpenTender() then drops anything already closed. (The real completeness fix is
+// paginating until an empty page — see fetchOpenReleasesFromApi.) Env-overridable
+// via TENDER_SYNC_LOOKBACK_DAYS.
+const LOOKBACK_DAYS      = Number(process.env.TENDER_SYNC_LOOKBACK_DAYS || 120);
 const REQUEST_TIMEOUT_MS = 120000; // 2 min — the gov API can be very slow
 const UPSERT_CHUNK       = 500;
 
@@ -106,6 +115,9 @@ function lookbackFrom() {
   d.setDate(d.getDate() - LOOKBACK_DAYS);
   return ymd(d);
 }
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 // ── Classification ────────────────────────────────────────────────────────────
 /**
@@ -138,17 +150,31 @@ export async function fetchOpenReleasesFromApi() {
   let pagesFetched = 0;
 
   for (let page = 1; page <= MAX_PAGES; page++) {
-    let releases;
-    try {
-      releases = await fetchPage(page, dateFrom, dateTo);
-    } catch (err) {
-      const code = err.response?.status || err.code || err.message;
-      console.warn(`[tender-sync] page ${page} failed (${code}) — stopping pagination`);
-      break; // gov API flaked — keep whatever we already gathered
+    let releases = null;
+
+    // The eTenders IIS API is slow & flaky (frequent ECONNABORTED/500s). Retry
+    // each page a couple of times with a short backoff before giving up, so a
+    // single transient blip doesn't truncate the whole dataset.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        releases = await fetchPage(page, dateFrom, dateTo);
+        break;
+      } catch (err) {
+        const code = err.response?.status || err.code || err.message;
+        if (attempt < 3) {
+          console.warn(`[tender-sync] page ${page} attempt ${attempt} failed (${code}) — retrying...`);
+          await sleep(2000 * attempt);
+        } else {
+          console.warn(`[tender-sync] page ${page} failed after ${attempt} attempts (${code}) — stopping pagination`);
+        }
+      }
     }
 
+    // Retries exhausted — keep whatever we already gathered from earlier pages.
+    if (releases === null) break;
+
     pagesFetched++;
-    if (!releases.length) break; // no more data
+    if (!releases.length) break; // empty page = TRUE end-of-data
 
     for (const r of releases) {
       if (!r?.ocid) continue;
@@ -159,7 +185,13 @@ export async function fetchOpenReleasesFromApi() {
       }
     }
 
-    if (releases.length < PAGE_SIZE) break; // reached the last page
+    // NOTE: Do NOT break when `releases.length < PAGE_SIZE`. The eTenders API
+    // returns short, non-full pages (~400 rows even when PageSize=1000) yet
+    // STILL has more data on subsequent pages. Breaking on a short page was
+    // capturing only ~25% of open tenders. We paginate until an empty page
+    // (or MAX_PAGES / a hard failure) instead. A small delay is polite to the
+    // fragile gov server and reduces timeout/rate-limit errors.
+    await sleep(500);
   }
 
   const all  = [...byOcid.values()];

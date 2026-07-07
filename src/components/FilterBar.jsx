@@ -239,7 +239,7 @@ const FilterBar = ({
       {!hideDateRange && (
         <div className="date-range-section">
           <div className="date-input-group">
-            <label htmlFor="dateFrom">From:</label>
+            <label htmlFor="dateFrom">Published From:</label>
             <input
               id="dateFrom"
               type="date"
@@ -250,7 +250,7 @@ const FilterBar = ({
             />
           </div>
           <div className="date-input-group">
-            <label htmlFor="dateTo">To:</label>
+            <label htmlFor="dateTo">Published To:</label>
             <input
               id="dateTo"
               type="date"
