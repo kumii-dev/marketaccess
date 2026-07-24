@@ -19,6 +19,7 @@ import express from 'express';
 import { Resend } from 'resend';
 import { createClient } from '@supabase/supabase-js';
 import { generalApiLimiter } from '../middleware/rateLimiters.js';
+import { getActiveTenders } from '../services/tenderSync.js';
 
 const router = express.Router();
 router.use(generalApiLimiter);
@@ -36,6 +37,17 @@ function getAdmin() {
   return _supabaseAdmin;
 }
 
+// Secondary client for kumii.africa Supabase project (iframe postMessage tokens)
+let _kumiiAdmin = null;
+function getKumiiAdmin() {
+  if (_kumiiAdmin) return _kumiiAdmin;
+  const url  = process.env.KUMII_SUPABASE_URL  || 'https://qypazgkngxhazgkuevwq.supabase.co';
+  const key  = process.env.KUMII_SUPABASE_ANON_KEY || process.env.KUMII_SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!key) return null; // env not configured — skip kumii project auth
+  _kumiiAdmin = createClient(url, key, { auth: { persistSession: false } });
+  return _kumiiAdmin;
+}
+
 function getResend() {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not configured on server');
@@ -44,10 +56,42 @@ function getResend() {
 
 // ── JWT → user helper ─────────────────────────────────────────────────────────
 
+/** Safely decode the JWT payload (no verification — just to read the `iss` claim). */
+function decodeJwtPayload(token) {
+  try {
+    const [, b64] = token.split('.');
+    return JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
+  } catch { return null; }
+}
+
+/**
+ * Resolve a Supabase user from the Bearer JWT.
+ * Supports tokens from BOTH the marketaccess project (direct login) AND
+ * the kumii.africa project (postMessage iframe token) so the email panel
+ * never returns 401 for platform-embedded users.
+ */
 async function getUserFromRequest(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token) return null;
+
+  // Peek at the issuer without verifying the signature
+  const payload = decodeJwtPayload(token);
+  const iss     = payload?.iss || '';
+
+  const isKumiiToken =
+    iss.includes('qypazgkngxhazgkuevwq') ||
+    (process.env.KUMII_SUPABASE_URL && iss.includes(new URL(process.env.KUMII_SUPABASE_URL).hostname));
+
+  if (isKumiiToken) {
+    const kumii = getKumiiAdmin();
+    if (kumii) {
+      const { data: { user }, error } = await kumii.auth.getUser(token);
+      if (!error && user) return user;
+    }
+    // Kumii client not configured — fall through to marketaccess project
+  }
+
   const { data: { user }, error } = await getAdmin().auth.getUser(token);
   if (error || !user) return null;
   return user;
@@ -192,10 +236,39 @@ function escHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+// ── Keyword-based server-side matching ───────────────────────────────────────
+
+/**
+ * Score a single OCDS release against a list of AI keywords.
+ * Mirrors the client-side matchTendersToProfile keyword pass.
+ * Returns 0–100.
+ */
+function scoreAgainstKeywords(release, keywords) {
+  if (!keywords || keywords.length === 0) return 0;
+
+  const tenderText = [
+    release.tender?.title        || '',
+    release.tender?.description  || '',
+    release.buyer?.name          || '',
+    release.tender?.mainProcurementCategory || '',
+    release.tender?.items?.map(i => i.description || '').join(' ') || '',
+  ].join(' ').toLowerCase();
+
+  const matched = keywords.filter(kw =>
+    kw && tenderText.includes(kw.toLowerCase())
+  ).length;
+
+  return Math.round((matched / keywords.length) * 100);
+}
+
 // ── Core send helper (also used by cron job) ──────────────────────────────────
 
 /**
  * Fetch smart-matched tenders for a user and dispatch a digest email.
+ * Uses active_tenders (live source of truth) + the user's saved AI keywords
+ * from ai_keyword_cache for per-user relevance scoring — mirrors the
+ * client-side SmartMatchedTenders matching pattern.
+ *
  * @param {{ userId, email, minScore, frequency }} subscription
  * @returns {Promise<{ sent: boolean, count: number, error?: string }>}
  */
@@ -203,53 +276,76 @@ export async function dispatchDigest({ userId, email, minScore = 40, frequency =
   try {
     const admin = getAdmin();
 
-    // Pull the most recent daily cache snapshot (shared, public data)
-    const { data: snapshot } = await admin
-      .from('etender_daily_cache')
-      .select('tenders')
-      .order('snapshot_date', { ascending: false })
+    // 1. Fetch this user's AI keywords (written by SmartMatchedTenders enhanceWithAI)
+    const { data: kwCache } = await admin
+      .from('ai_keyword_cache')
+      .select('keywords')
+      .eq('user_id', userId)
+      .order('last_used_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!snapshot?.tenders) {
-      console.warn(`[email] No tender cache available for digest to ${email}`);
-      return { sent: false, count: 0, error: 'No tender cache available' };
+    const keywords = Array.isArray(kwCache?.keywords) ? kwCache.keywords : [];
+
+    // 2. Pull live tenders from active_tenders (background-synced hourly)
+    const { results: allTenders } = await getActiveTenders({ limit: 3000 });
+
+    if (!allTenders || allTenders.length === 0) {
+      console.warn(`[email] No active tenders available for digest to ${email}`);
+      return { sent: false, count: 0, error: 'No active tenders available' };
     }
 
-    const allTenders = Array.isArray(snapshot.tenders) ? snapshot.tenders : [];
-
-    // Filter by minScore — tenders that have been AI-scored
-    const matched = allTenders
-      .filter(t => (t.matchScore ?? t.match_score ?? 0) >= minScore)
-      .sort((a, b) => (b.matchScore ?? b.match_score ?? 0) - (a.matchScore ?? a.match_score ?? 0))
-      .slice(0, 30); // cap at 30 per email
+    // 3. Score each tender against the user's keywords (or use a generous fallback)
+    let matched;
+    if (keywords.length > 0) {
+      matched = allTenders
+        .map(t => ({ ...t, matchScore: scoreAgainstKeywords(t, keywords) }))
+        .filter(t => t.matchScore >= minScore)
+        .sort((a, b) => b.matchScore - a.matchScore)
+        .slice(0, 30);
+    } else {
+      // No keywords yet — send the most recently opened tenders as a generic digest
+      matched = allTenders
+        .map(t => ({ ...t, matchScore: 0 }))
+        .slice(0, 15);
+    }
 
     if (matched.length === 0) {
-      console.log(`[email] No tenders ≥${minScore}% score for ${email} — skipping`);
+      console.log(`[email] No tenders ≥${minScore}% match for ${email} — skipping`);
       return { sent: false, count: 0, error: `No tenders above ${minScore}% threshold` };
     }
 
-    const html = buildDigestHtml(matched, email, minScore, frequency);
+    // 4. Normalise shape for buildDigestHtml
+    const normalised = matched.map(t => ({
+      title:        t.tender?.title        || t.title        || 'Untitled Tender',
+      organOfState: t.buyer?.name          || t.organOfState || '',
+      closingDate:  t.tender?.tenderPeriod?.endDate || t.closingDate || null,
+      matchScore:   t.matchScore,
+      category:     t.tender?.mainProcurementCategory || t.category || '',
+      ocid:         t.ocid || '',
+    }));
+
+    const html = buildDigestHtml(normalised, email, minScore, frequency);
     const freqLabel = frequency === 'daily' ? 'Daily' : 'Weekly';
     const resend = getResend();
 
     const { error: sendErr } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'Market Access <alerts@kumii.africa>',
       to:   email,
-      subject: `🏛️ ${freqLabel} Tender Digest — ${matched.length} match${matched.length !== 1 ? 'es' : ''} above ${minScore}%`,
+      subject: `🏛️ ${freqLabel} Tender Digest — ${normalised.length} match${normalised.length !== 1 ? 'es' : ''} above ${minScore}%`,
       html,
     });
 
     if (sendErr) throw new Error(sendErr.message || JSON.stringify(sendErr));
 
-    // Update last_sent_at (best-effort — use service role key)
+    // Update last_sent_at (best-effort)
     await admin
       .from('email_subscriptions')
       .update({ last_sent_at: new Date().toISOString() })
       .eq('user_id', userId);
 
-    console.log(`✅ [email] Digest sent to ${email} — ${matched.length} tenders`);
-    return { sent: true, count: matched.length };
+    console.log(`✅ [email] Digest sent to ${email} — ${normalised.length} tenders (${keywords.length} keywords)`);
+    return { sent: true, count: normalised.length };
 
   } catch (err) {
     console.error(`❌ [email] dispatchDigest failed for ${email}:`, err.message);
