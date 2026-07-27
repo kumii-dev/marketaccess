@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import TenderResponseModal from './TenderResponseModal';
 import { useEmailSubscription } from '../hooks/useEmailSubscription';
@@ -68,6 +68,57 @@ export default function MyTendersPage({ onBack }) {
   const [deleting, setDeleting]   = useState(null);
   const [openDraft, setOpenDraft] = useState(null);
 
+  // ── Dual-path auth ────────────────────────────────────────────────────────
+  // Path A: direct Supabase session (dev / standalone)
+  // Path B: KUMII_AUTH_TOKEN postMessage from kumii.africa parent iframe
+  //
+  // When the token arrives via Path B we call supabase.auth.setSession() so
+  // that every subsequent supabase.from(...) call automatically carries the
+  // correct JWT through RLS — fixing the "0 drafts" and profile-ctx problems.
+  const tokenRef = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    // Path A: check for an existing local session immediately
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled || tokenRef.current) return;
+      if (session?.access_token) {
+        tokenRef.current = session.access_token;
+      }
+    });
+
+    // Catch future session refreshes
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (!cancelled && session?.access_token) {
+          tokenRef.current = session.access_token;
+        }
+      }
+    );
+
+    // Path B: token pushed from kumii.africa parent iframe
+    const handleMessage = (event) => {
+      if (event.data?.type === 'KUMII_AUTH_TOKEN' && event.data.token && !cancelled) {
+        const token = event.data.token;
+        tokenRef.current = token;
+        // Authenticate the local Supabase client so RLS-protected queries work
+        supabase.auth.setSession({ access_token: token, refresh_token: '' }).catch(() => {});
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    if (window.parent !== window.self) {
+      window.parent.postMessage({ type: 'REQUEST_AUTH_TOKEN' }, '*');
+    }
+
+    return () => {
+      cancelled = true;
+      authSub.unsubscribe();
+      window.removeEventListener('message', handleMessage);
+    };
+  }, []);
+
   // ── Profile context from SmartMatchedTenders data ─────────────────────────
   // Reads the same ai_keyword_cache that SmartMatchedTenders writes to, giving
   // MyTendersPage awareness of what keywords are driving the user's matches.
@@ -78,12 +129,23 @@ export default function MyTendersPage({ onBack }) {
     keywordsLoaded: false,
   });
 
+  // Re-run after auth.setSession() fires (onAuthStateChange will emit TOKEN_REFRESHED
+  // / SIGNED_IN) — we track it via a counter so the dep array stays stable.
+  const [authGeneration, setAuthGeneration] = useState(0);
+
+  useEffect(() => {
+    const { data: { subscription: s } } = supabase.auth.onAuthStateChange(() => {
+      setAuthGeneration(g => g + 1);
+    });
+    return () => s.unsubscribe();
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadProfileCtx() {
       try {
-        // Get user from session
+        // Get user from current session (works for both Path A & B after setSession)
         const { data: { user } } = await supabase.auth.getUser();
         if (!user || cancelled) return;
 
@@ -118,7 +180,7 @@ export default function MyTendersPage({ onBack }) {
 
     loadProfileCtx();
     return () => { cancelled = true; };
-  }, []);
+  }, [authGeneration]);
 
   // ── Email subscription ────────────────────────────────────────────────────
   const {
@@ -165,7 +227,7 @@ export default function MyTendersPage({ onBack }) {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, authGeneration]);
 
   const filtered = filter === 'all' ? rows : rows.filter(r => r.status === filter);
 

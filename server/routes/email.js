@@ -25,6 +25,11 @@ const router = express.Router();
 router.use(generalApiLimiter);
 
 // ── Clients ───────────────────────────────────────────────────────────────────
+//
+// All users — both those who log in directly AND those who arrive via the
+// kumii.africa platform iframe — authenticate against the single Supabase
+// project njcancswtqnxihxavshl.  The qypazgkngxhazgkuevwq project is used
+// only for the api-read-profiles Edge Function and is unrelated to auth.
 
 let _supabaseAdmin = null;
 function getAdmin() {
@@ -37,17 +42,6 @@ function getAdmin() {
   return _supabaseAdmin;
 }
 
-// Secondary client for kumii.africa Supabase project (iframe postMessage tokens)
-let _kumiiAdmin = null;
-function getKumiiAdmin() {
-  if (_kumiiAdmin) return _kumiiAdmin;
-  const url  = process.env.KUMII_SUPABASE_URL  || 'https://qypazgkngxhazgkuevwq.supabase.co';
-  const key  = process.env.KUMII_SUPABASE_ANON_KEY || process.env.KUMII_SUPABASE_SERVICE_ROLE_KEY || '';
-  if (!key) return null; // env not configured — skip kumii project auth
-  _kumiiAdmin = createClient(url, key, { auth: { persistSession: false } });
-  return _kumiiAdmin;
-}
-
 function getResend() {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not configured on server');
@@ -56,42 +50,15 @@ function getResend() {
 
 // ── JWT → user helper ─────────────────────────────────────────────────────────
 
-/** Safely decode the JWT payload (no verification — just to read the `iss` claim). */
-function decodeJwtPayload(token) {
-  try {
-    const [, b64] = token.split('.');
-    return JSON.parse(Buffer.from(b64, 'base64url').toString('utf8'));
-  } catch { return null; }
-}
-
 /**
  * Resolve a Supabase user from the Bearer JWT.
- * Supports tokens from BOTH the marketaccess project (direct login) AND
- * the kumii.africa project (postMessage iframe token) so the email panel
- * never returns 401 for platform-embedded users.
+ * Works for both direct-session tokens and iframe postMessage tokens —
+ * both are issued by njcancswtqnxihxavshl so a single getAdmin() call suffices.
  */
 async function getUserFromRequest(req) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token) return null;
-
-  // Peek at the issuer without verifying the signature
-  const payload = decodeJwtPayload(token);
-  const iss     = payload?.iss || '';
-
-  const isKumiiToken =
-    iss.includes('qypazgkngxhazgkuevwq') ||
-    (process.env.KUMII_SUPABASE_URL && iss.includes(new URL(process.env.KUMII_SUPABASE_URL).hostname));
-
-  if (isKumiiToken) {
-    const kumii = getKumiiAdmin();
-    if (kumii) {
-      const { data: { user }, error } = await kumii.auth.getUser(token);
-      if (!error && user) return user;
-    }
-    // Kumii client not configured — fall through to marketaccess project
-  }
-
   const { data: { user }, error } = await getAdmin().auth.getUser(token);
   if (error || !user) return null;
   return user;
