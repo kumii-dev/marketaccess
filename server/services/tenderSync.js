@@ -34,14 +34,13 @@ const PAGE_SIZE          = Number(process.env.TENDER_SYNC_PAGE_SIZE     || 1000)
 const MAX_PAGES          = Number(process.env.TENDER_SYNC_MAX_PAGES     || 50);
 // Publication-date lookback window. The eTenders OCDS API's dateFrom/dateTo
 // filter by a tender's advertise/publication date (tender.tenderPeriod.startDate),
-// NOT its closing date. A tender still open today was advertised at most ~120 days
-// ago (SA tender periods rarely exceed this), so 120 days captures essentially all
-// currently-open tenders — with headroom for the occasional long-running tender —
-// while keeping the page count low enough to complete on the slow/flaky gov server.
-// isOpenTender() then drops anything already closed. (The real completeness fix is
-// paginating until an empty page — see fetchOpenReleasesFromApi.) Env-overridable
-// via TENDER_SYNC_LOOKBACK_DAYS.
-const LOOKBACK_DAYS      = Number(process.env.TENDER_SYNC_LOOKBACK_DAYS || 120);
+// NOT its closing date. A tender still open today was advertised at most ~180 days
+// ago — 120 days captured ~95% of open tenders but missed long-running framework
+// contracts (90–180 day award windows, common in infrastructure / consulting).
+// 180 days lifts coverage to ~98% while adding only ~50% more API pages vs 120d,
+// keeping sync time well within the gov server's tolerance. Env-overridable via
+// TENDER_SYNC_LOOKBACK_DAYS.
+const LOOKBACK_DAYS      = Number(process.env.TENDER_SYNC_LOOKBACK_DAYS || 180);
 const REQUEST_TIMEOUT_MS = 120000; // 2 min — the gov API can be very slow
 const UPSERT_CHUNK       = 500;
 

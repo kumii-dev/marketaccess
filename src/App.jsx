@@ -29,6 +29,11 @@ function App() {
   const [loadingSubStatus, setLoadingSubStatus] = useState('');
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [fallbackNotice, setFallbackNotice] = useState(''); // set when daily/static cache is used
+  // Authoritative total from the most recent /api/active-tenders response.
+  // Decoupled from allTenders.length so the header counter is correct during
+  // the brief window where a stale IDB cache is displayed before the background
+  // refresh completes.
+  const [apiTotal, setApiTotal] = useState(null);
   const [filters, setFilters] = useState({
     search: '',
     province: '',
@@ -269,13 +274,12 @@ function App() {
           // province data than the currently-displayed set (covers the case where
           // IDB cache had province-less data from before the active-tenders store
           // was populated — ensures province filtering works after first load).
-          setAllTenders(prev => {
-            if (freshTenders.length !== prev.length) return freshTenders;
-            const prevProvinceCount = prev.filter(t => t.tender?.province).length;
-            const freshProvinceCount = freshTenders.filter(t => t.tender?.province).length;
-            return freshProvinceCount > prevProvinceCount ? freshTenders : prev;
-          });
-
+          // Always swap in fresh data from active_tenders — it is the single
+          // source of truth and is guaranteed to be at least as current as any
+          // cached layer. Using a strict length !== check caused the counter to
+          // stay at the stale cached value even when active_tenders had more rows.
+          setAllTenders(freshTenders);
+          setApiTotal(freshData?.total ?? freshTenders.length);
           console.log('✅ Background refresh complete:', freshTenders.length, 'tenders');
         } else {
           console.warn('⚠️ Background refresh got no data - keeping cached view');
@@ -327,28 +331,15 @@ function App() {
       }
       console.log('❌ IndexedDB cache miss');
 
-      // PHASE 0.5: Check Supabase (100-200ms, 24hr TTL, cross-device sync)
-      console.log('🔍 Phase 0.5: Checking Supabase cache...');
-      const supabaseTenders = await getTendersFromSupabase(from, to);
-      if (supabaseTenders && supabaseTenders.length > 0) {
-        console.log('✅ Supabase cache hit! Loaded', supabaseTenders.length, 'tenders in ~185ms');
-        setAllTenders(supabaseTenders);
-        setLoading(false);
-        setLoadingProgress({ current: 100, total: 100, percentage: 100 });
-        
-        // Save to IndexedDB for faster next time
-        await saveTendersToIDB(supabaseTenders, from, to).catch(err => {
-          console.warn('⚠️ Failed to save Supabase data to IndexedDB:', err.message);
-        });
-        
-        // Save to SessionStorage too
-        cacheTenders(supabaseTenders, from, to);
-        
-        // Background refresh
-        fetchFreshDataInBackground(from, to);
-        return;
-      }
-      console.log('❌ Supabase cache miss');
+      // PHASE 0.5: Check Supabase tender_cache (cross-device, 24h TTL).
+      // NOTE: This is the OLD per-user cache written by saveTendersToSupabase().
+      // It is intentionally skipped here in favour of the live /api/active-tenders
+      // store (Phase 2), which is always fresher and complete. tender_cache is
+      // only used as a last-resort offline fallback inside the error handler below.
+      // Querying it here caused a stale row (e.g. 468 rows from a previous session)
+      // to win the cache race and permanently hide the 645 rows already in
+      // active_tenders.
+      console.log('⏭️ Phase 0.5: Skipping tender_cache — using active_tenders as primary source');
 
       // PHASE 1: Check SessionStorage (5-10ms, 5min TTL)
       console.log('� Phase 1: Checking SessionStorage cache...');
@@ -383,6 +374,7 @@ function App() {
       const allLoaded = apiData?.results || [];
 
       setAllTenders(allLoaded);
+      setApiTotal(apiData?.total ?? allLoaded.length);
       setLoading(false);
       setCurrentPage(1);
       setLoadingProgress({ current: 100, total: 100, percentage: 100 });
@@ -643,7 +635,7 @@ function App() {
         <div className="container">
           <FilterBar
             onFilterChange={handleFilterChange}
-            totalCount={allTenders.length}
+            totalCount={apiTotal ?? allTenders.length}
             visibleCount={filteredAndSortedTenders.length}
             isLoading={loading}
             tenders={allTenders}
