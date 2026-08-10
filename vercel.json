@@ -3,7 +3,8 @@
   "builds": [
     {
       "src": "server/index.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": { "maxDuration": 60 }
     },
     {
       "src": "package.json",
@@ -34,6 +35,12 @@
         { "key": "X-Frame-Options", "value": "ALLOW-FROM https://kumii.africa" },
         { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://kumii.africa https://*.lovable.app https://*.lovableproject.com" }
       ]
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/active-tenders/sync?maxPages=20",
+      "schedule": "0 5 * * *"
     }
   ],
   "env": {

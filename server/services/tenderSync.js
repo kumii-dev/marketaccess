@@ -9,18 +9,44 @@
  * The gov API is slow (single fetches can take ~1m 40s) and unreliable (frequent
  * 500s). If every user's page load hit it directly the experience would be poor
  * and the number of upstream calls would grow linearly with traffic. Instead,
- * THIS app fetches ONCE per hour in the background and stores the results in
- * Supabase. The frontend then reads the pre-filtered, indexed table — fast page
- * loads and a constant, low number of upstream calls no matter how many users.
+ * THIS app fetches in the background and stores the results in Supabase. The
+ * frontend then reads the pre-filtered, indexed table — fast page loads and a
+ * constant, low number of upstream calls no matter how many users.
+ *
+ * ⚠️ SERVERLESS CONSTRAINT (Vercel) — READ THIS BEFORE CHANGING SCHEDULING
+ * -------------------------------------------------------------------------
+ * This app is deployed on Vercel (@vercel/node) — a serverless platform. The
+ * node-cron schedules below ONLY work on a persistent, always-on process; on
+ * Vercel the function is spun up per-request and torn down immediately after,
+ * so an in-memory `cron.schedule(...)` never actually fires in production.
+ * Left unaddressed, this causes `active_tenders` to silently go stale: rows
+ * are never replenished, and the "safety net" expiry filter in
+ * getActiveTenders() progressively hides more and more of them as their
+ * closing dates pass — explaining a slow drop in displayed tender count over
+ * time with no code changes.
+ *
+ * The fix is **Vercel Cron Jobs** (configured in vercel.json's `crons` array),
+ * which hit an HTTP endpoint on a schedule instead of requiring a persistent
+ * process. Because a single Vercel invocation is still time-boxed (10s on
+ * Hobby, up to 300s on Pro/Enterprise) and a full gov-API sweep can take
+ * several minutes across up to 50 pages, the sync is CHUNKED and RESUMABLE:
+ * each invocation fetches a bounded number of pages (maxPagesThisRun) and
+ * persists its position in the `tender_sync_cursor` table, so successive
+ * scheduled invocations continue where the last one left off — converging
+ * toward full coverage of the ~1,944 currently-open tenders over several runs
+ * instead of requiring one giant request.
  *
  * Responsibilities
  * ----------------
- *   1. fetchOpenReleasesFromApi() — paginate the gov API over a lookback window
+ *   1. fetchOpenReleasesFromApi() — paginate the gov API, resumable via a
+ *                                    persisted cursor + bounded page count
  *   2. syncActiveTenders()        — upsert open releases + prune expired ones
  *   3. pruneExpiredTenders()      — delete rows whose closing date has passed
  *   4. getActiveTenders()         — read helper for the /api/active-tenders route
  *
- * Scheduling lives in server/index.js (node-cron, hourly + a startup warm-up).
+ * Scheduling: Vercel Cron Jobs (see vercel.json) hit /api/active-tenders/sync
+ * every few minutes. The legacy node-cron block in server/index.js is guarded
+ * to only run on non-Vercel (persistent) deployments — see `IS_SERVERLESS`.
  * Writes use the service_role key (bypasses RLS) so fetching is fully decoupled
  * from user control.
  */
@@ -32,6 +58,10 @@ import { createClient } from '@supabase/supabase-js';
 const OCDS_BASE_URL      = 'https://ocds-api.etenders.gov.za/api/OCDSReleases';
 const PAGE_SIZE          = Number(process.env.TENDER_SYNC_PAGE_SIZE     || 1000);
 const MAX_PAGES          = Number(process.env.TENDER_SYNC_MAX_PAGES     || 50);
+// Default pages fetched per invocation when the caller doesn't specify one.
+// Sized conservatively so a single run comfortably fits inside a Vercel Hobby
+// function's 10s window even on a slow-but-not-timing-out gov API response.
+const DEFAULT_PAGES_PER_RUN = Number(process.env.TENDER_SYNC_PAGES_PER_RUN || 5);
 // Publication-date lookback window. The eTenders OCDS API's dateFrom/dateTo
 // filter by a tender's advertise/publication date (tender.tenderPeriod.startDate),
 // NOT its closing date. A tender still open today was advertised at most ~180 days
@@ -101,8 +131,49 @@ export function getSyncStatus() {
     isSyncing:  _isSyncing,
     lastSyncAt: _lastSyncAt,
     lastResult: _lastResult,
-    config:     { lookbackDays: LOOKBACK_DAYS, pageSize: PAGE_SIZE, maxPages: MAX_PAGES },
+    config:     {
+      lookbackDays:  LOOKBACK_DAYS,
+      pageSize:      PAGE_SIZE,
+      maxPages:      MAX_PAGES,
+      pagesPerRun:   DEFAULT_PAGES_PER_RUN,
+    },
   };
+}
+
+// ── Resumable cursor (Supabase-persisted) ─────────────────────────────────────
+// Vercel serverless functions are time-boxed and cannot complete a full,
+// up-to-50-page sweep of the gov API in one invocation. The cursor lets
+// successive short invocations (triggered by Vercel Cron) resume pagination
+// instead of restarting from page 1 every time — converging on full coverage
+// over several scheduled runs.
+async function loadCursor() {
+  const admin = getAdmin();
+  const { data, error } = await admin
+    .from('tender_sync_cursor')
+    .select('*')
+    .eq('id', 1)
+    .maybeSingle();
+  if (error) {
+    console.warn('[tender-sync] cursor load failed, starting fresh:', error.message);
+    return null;
+  }
+  return data;
+}
+
+async function saveCursor({ dateFrom, dateTo, nextPage, pagesDone, isComplete }) {
+  const admin = getAdmin();
+  const { error } = await admin
+    .from('tender_sync_cursor')
+    .upsert({
+      id:          1,
+      date_from:   dateFrom,
+      date_to:     dateTo,
+      next_page:   nextPage,
+      pages_done:  pagesDone,
+      is_complete: isComplete,
+      updated_at:  new Date().toISOString(),
+    }, { onConflict: 'id' });
+  if (error) console.warn('[tender-sync] cursor save failed:', error.message);
 }
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -141,65 +212,123 @@ async function fetchPage(pageNumber, dateFrom, dateTo) {
   return res.data?.releases || [];
 }
 
-// ── Fetch + dedupe every open release over the lookback window ─────────────────
-export async function fetchOpenReleasesFromApi() {
-  const dateFrom = lookbackFrom();
-  const dateTo   = ymd(new Date());
-  const byOcid   = new Map();
-  let pagesFetched = 0;
+// ── Fetch + dedupe open releases, resumable across short invocations ──────────
+/**
+ * Fetch up to `maxPagesThisRun` pages of the gov API, resuming from the
+ * persisted cursor (or starting a fresh sweep if none exists / the previous
+ * sweep completed). This bounds each invocation's duration so it fits inside
+ * a serverless function's execution window, while still converging on full
+ * coverage of the gov API's open tenders over several scheduled runs.
+ *
+ * @param {number} maxPagesThisRun
+ * @returns {Promise<{ releases: object[], sweepComplete: boolean, pagesThisRun: number }>}
+ */
+export async function fetchOpenReleasesFromApi(maxPagesThisRun = DEFAULT_PAGES_PER_RUN) {
+  const cursor = await loadCursor();
 
-  for (let page = 1; page <= MAX_PAGES; page++) {
-    let releases = null;
+  // Start a new sweep when: no cursor yet, the previous sweep finished, or the
+  // lookback window has rolled forward (dateFrom is computed relative to "now").
+  const freshDateFrom = lookbackFrom();
+  const freshDateTo   = ymd(new Date());
+  const startNewSweep = !cursor || cursor.is_complete || cursor.date_from !== freshDateFrom;
+
+  const dateFrom  = startNewSweep ? freshDateFrom : cursor.date_from;
+  const dateTo    = startNewSweep ? freshDateTo   : cursor.date_to;
+  let   startPage = startNewSweep ? 1             : cursor.next_page;
+  let   pagesDone = startNewSweep ? 0              : cursor.pages_done;
+
+  if (startNewSweep) {
+    console.log(`[tender-sync] starting NEW sweep ${dateFrom}→${dateTo}`);
+  } else {
+    console.log(`[tender-sync] RESUMING sweep ${dateFrom}→${dateTo} at page ${startPage} (${pagesDone} done so far)`);
+  }
+
+  const releases = [];
+  let pagesThisRun = 0;
+  let sweepComplete = false;
+  const lastPage = Math.min(startPage + maxPagesThisRun - 1, MAX_PAGES);
+
+  for (let page = startPage; page <= lastPage; page++) {
+    let pageReleases = null;
 
     // The eTenders IIS API is slow & flaky (frequent ECONNABORTED/500s). Retry
     // each page a couple of times with a short backoff before giving up, so a
     // single transient blip doesn't truncate the whole dataset.
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        releases = await fetchPage(page, dateFrom, dateTo);
+        pageReleases = await fetchPage(page, dateFrom, dateTo);
         break;
       } catch (err) {
         const code = err.response?.status || err.code || err.message;
         if (attempt < 3) {
           console.warn(`[tender-sync] page ${page} attempt ${attempt} failed (${code}) — retrying...`);
-          await sleep(2000 * attempt);
+          await sleep(1500 * attempt);
         } else {
-          console.warn(`[tender-sync] page ${page} failed after ${attempt} attempts (${code}) — stopping pagination`);
+          console.warn(`[tender-sync] page ${page} failed after ${attempt} attempts (${code}) — stopping this run, will retry next invocation`);
         }
       }
     }
 
-    // Retries exhausted — keep whatever we already gathered from earlier pages.
-    if (releases === null) break;
+    // Retries exhausted this run — stop here; the cursor stays put (not
+    // advanced past this page) so the NEXT invocation retries the same page.
+    if (pageReleases === null) break;
 
-    pagesFetched++;
-    if (!releases.length) break; // empty page = TRUE end-of-data
+    pagesThisRun++;
+    pagesDone++;
 
-    for (const r of releases) {
-      if (!r?.ocid) continue;
-      // OCDS "compiled" records can repeat an ocid — keep the most recent one.
-      const existing = byOcid.get(r.ocid);
-      if (!existing || new Date(r.date || 0) >= new Date(existing.date || 0)) {
-        byOcid.set(r.ocid, r);
-      }
+    if (!pageReleases.length) {
+      // Empty page = true end-of-data for this sweep.
+      sweepComplete = true;
+      break;
     }
 
-    // NOTE: Do NOT break when `releases.length < PAGE_SIZE`. The eTenders API
-    // returns short, non-full pages (~400 rows even when PageSize=1000) yet
-    // STILL has more data on subsequent pages. Breaking on a short page was
-    // capturing only ~25% of open tenders. We paginate until an empty page
-    // (or MAX_PAGES / a hard failure) instead. A small delay is polite to the
-    // fragile gov server and reduces timeout/rate-limit errors.
-    await sleep(500);
+    releases.push(...pageReleases);
+
+    // NOTE: Do NOT break when `pageReleases.length < PAGE_SIZE`. The eTenders
+    // API returns short, non-full pages (~400 rows even when PageSize=1000)
+    // yet STILL has more data on subsequent pages. Breaking on a short page
+    // was capturing only ~25% of open tenders. We paginate until an empty
+    // page (or MAX_PAGES / the per-run cap) instead. A small delay is polite
+    // to the fragile gov server and reduces timeout/rate-limit errors.
+    if (page < lastPage) await sleep(400);
   }
 
+  if (!sweepComplete && startPage + pagesThisRun - 1 >= MAX_PAGES) {
+    // Hit the absolute page ceiling — treat as complete so we don't loop forever.
+    sweepComplete = true;
+  }
+
+  const nextPage = sweepComplete ? 1 : startPage + pagesThisRun;
+  await saveCursor({
+    dateFrom,
+    dateTo,
+    nextPage,
+    pagesDone: sweepComplete ? 0 : pagesDone,
+    isComplete: sweepComplete,
+  });
+
+  console.log(
+    `[tender-sync] this run: ${pagesThisRun} page(s) fetched, ${releases.length} release(s), ` +
+    `sweep ${sweepComplete ? 'COMPLETE' : `paused (resume at page ${nextPage})`}`
+  );
+
+  return { releases, sweepComplete, pagesThisRun };
+}
+
+// ── Dedupe + classify a batch of raw releases ─────────────────────────────────
+function dedupeAndFilterOpen(rawReleases) {
+  const byOcid = new Map();
+  for (const r of rawReleases) {
+    if (!r?.ocid) continue;
+    // OCDS "compiled" records can repeat an ocid — keep the most recent one.
+    const existing = byOcid.get(r.ocid);
+    if (!existing || new Date(r.date || 0) >= new Date(existing.date || 0)) {
+      byOcid.set(r.ocid, r);
+    }
+  }
   const all  = [...byOcid.values()];
   const open = all.filter(r => isOpenTender(r));
-  console.log(
-    `[tender-sync] ${dateFrom}→${dateTo}: ${pagesFetched} page(s), ` +
-    `${all.length} unique releases, ${open.length} open`
-  );
-  return open;
+  return { all, open };
 }
 
 // ── Map an OCDS release → an active_tenders row ───────────────────────────────
@@ -265,34 +394,48 @@ export async function pruneExpiredTenders() {
 }
 
 // ── Orchestrator ──────────────────────────────────────────────────────────────
-export async function syncActiveTenders({ trigger = 'manual' } = {}) {
+/**
+ * @param {{ trigger?: string, maxPagesThisRun?: number }} opts
+ *   maxPagesThisRun bounds how many gov-API pages this invocation fetches —
+ *   keep it small (e.g. 5–8) when called from a serverless Vercel Cron Job so
+ *   the request finishes inside the function's execution window. Successive
+ *   scheduled invocations resume via the persisted cursor until the sweep
+ *   completes, then start a fresh sweep.
+ */
+export async function syncActiveTenders({ trigger = 'manual', maxPagesThisRun = DEFAULT_PAGES_PER_RUN } = {}) {
   if (_isSyncing) {
     console.log('[tender-sync] skip — a sync is already running');
     return { skipped: true };
   }
   _isSyncing = true;
   const startedAt = Date.now();
-  console.log(`[tender-sync] ▶ starting (trigger: ${trigger})`);
+  console.log(`[tender-sync] ▶ starting (trigger: ${trigger}, maxPagesThisRun: ${maxPagesThisRun})`);
 
   try {
-    const open = await fetchOpenReleasesFromApi();
+    const { releases: rawReleases, sweepComplete, pagesThisRun } =
+      await fetchOpenReleasesFromApi(maxPagesThisRun);
+    const { all, open } = dedupeAndFilterOpen(rawReleases);
 
     let upserted = 0;
     if (open.length) {
       upserted = await upsertRows(open.map(toRow));
-      console.log(`[tender-sync] upserted ${upserted} open tender(s)`);
+      console.log(`[tender-sync] upserted ${upserted} open tender(s) (${all.length} unique releases this run)`);
     } else {
-      console.warn('[tender-sync] no open tenders fetched — skipping upsert (API may be down)');
+      console.warn('[tender-sync] no open tenders fetched this run — nothing to upsert (may be mid-sweep or API down)');
     }
 
-    // Always prune to honour the data-lifecycle requirement, even if the fetch
-    // returned nothing (e.g. the gov API was down this hour).
-    const pruned = await pruneExpiredTenders();
+    // Only prune once a full sweep completes — pruning mid-sweep (when we've
+    // only seen a fraction of pages so far) would incorrectly delete tenders
+    // whose pages simply haven't been re-fetched yet this sweep.
+    let pruned = 0;
+    if (sweepComplete) {
+      pruned = await pruneExpiredTenders();
+    }
 
     const durationSec = Number(((Date.now() - startedAt) / 1000).toFixed(1));
     _lastSyncAt = new Date().toISOString();
-    _lastResult = { upserted, pruned, durationSec };
-    console.log(`[tender-sync] ✅ done in ${durationSec}s (upserted ${upserted}, pruned ${pruned})`);
+    _lastResult = { upserted, pruned, pagesThisRun, sweepComplete, durationSec };
+    console.log(`[tender-sync] ✅ done in ${durationSec}s (upserted ${upserted}, pruned ${pruned}, sweepComplete: ${sweepComplete})`);
     return _lastResult;
   } catch (err) {
     console.error('[tender-sync] ❌ sync failed:', err.message);

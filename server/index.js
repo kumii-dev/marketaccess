@@ -114,17 +114,43 @@ app.get('/api/active-tenders/status', (req, res) => {
   res.json(getSyncStatus());
 });
 
-// Manual sync trigger — DISABLED unless SYNC_SECRET is set and matches the
-// x-sync-key header. Keeps fetching decoupled from ordinary users while still
-// allowing an operator to force a refresh (e.g. right after deploy).
-app.post('/api/active-tenders/sync', async (req, res) => {
-  const secret = process.env.SYNC_SECRET;
-  if (!secret || req.get('x-sync-key') !== secret) {
+// Sync trigger — accepts EITHER:
+//   1. Vercel Cron Jobs — Vercel automatically sends
+//      `Authorization: Bearer ${CRON_SECRET}` on requests it dispatches from
+//      the `crons` array in vercel.json. This is how the sync ACTUALLY runs in
+//      production — Vercel serverless functions cannot host a persistent
+//      node-cron process (see tenderSync.js header comment for details).
+//   2. Manual operator trigger — the `x-sync-key` header matching SYNC_SECRET,
+//      for forcing a refresh by hand (e.g. right after deploy).
+//
+// Accepts GET (Vercel Cron only supports GET) and POST (manual/operator use).
+// `?maxPages=N` bounds how many gov-API pages this invocation fetches so it
+// finishes inside the serverless function's execution window; the sync is
+// resumable across invocations via the persisted cursor (tender_sync_cursor).
+function isAuthorizedSyncRequest(req) {
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret && req.get('authorization') === `Bearer ${cronSecret}`) return true;
+
+  const syncSecret = process.env.SYNC_SECRET;
+  if (syncSecret && req.get('x-sync-key') === syncSecret) return true;
+
+  return false;
+}
+
+async function handleSyncRequest(req, res) {
+  if (!isAuthorizedSyncRequest(req)) {
     return res.status(403).json({ error: 'forbidden' });
   }
-  const result = await syncActiveTenders({ trigger: 'manual-endpoint' });
+  const maxPages = Number(req.query.maxPages) || undefined; // undefined → service default
+  const result = await syncActiveTenders({
+    trigger: req.method === 'GET' ? 'vercel-cron' : 'manual-endpoint',
+    ...(maxPages ? { maxPagesThisRun: maxPages } : {}),
+  });
   res.json({ ok: !result?.error, ...result });
-});
+}
+
+app.get('/api/active-tenders/sync', handleSyncRequest);
+app.post('/api/active-tenders/sync', handleSyncRequest);
 
 // Proxy endpoint for OCDS Releases API
 // Tries progressively shorter date windows when the gov server times out.
@@ -305,17 +331,28 @@ cron.schedule('0 5 * * 1', () => runDigestCron('weekly'), { timezone: 'UTC' });
 console.log('📧 Email digest scheduler started (daily 07:00 SAST | weekly Mon 07:00 SAST)');
 
 // ── Active-tenders background sync ────────────────────────────────────────────
-// Fetch every OPEN tender from the gov API once per hour and store it in
-// Supabase, pruning expired tenders in the same run. This is the ONLY thing that
-// calls the upstream eTenders API — user page loads read from Supabase instead.
-cron.schedule('0 * * * *', () => {
-  syncActiveTenders({ trigger: 'cron-hourly' });
-}, { timezone: 'UTC' });
+// Fetch open tenders from the gov API and store them in Supabase, pruning
+// expired tenders once a full sweep completes.
+//
+// ⚠️ On Vercel (serverless) this in-process node-cron NEVER fires — the
+// function is torn down between requests, so nothing keeps this timer alive.
+// The real trigger in production is Vercel Cron Jobs (see vercel.json `crons`),
+// which hit GET /api/active-tenders/sync on a schedule instead. This block is
+// guarded to only run on persistent, always-on hosts (e.g. local dev, a VPS,
+// Render/Railway) where `process.env.VERCEL` is not set — on Vercel it would
+// just be dead code that never executes.
+if (!process.env.VERCEL) {
+  cron.schedule('0 * * * *', () => {
+    syncActiveTenders({ trigger: 'cron-hourly' });
+  }, { timezone: 'UTC' });
 
-console.log('🗂️  Active-tenders sync scheduled (hourly, on the hour)');
+  console.log('🗂️  Active-tenders sync scheduled (hourly, on the hour) — persistent-host node-cron');
 
-// Warm the store shortly after boot so there's data without waiting for the top
-// of the next hour. Delayed + non-blocking so it never holds up server start.
-setTimeout(() => {
-  syncActiveTenders({ trigger: 'startup' });
-}, 8000);
+  // Warm the store shortly after boot so there's data without waiting for the top
+  // of the next hour. Delayed + non-blocking so it never holds up server start.
+  setTimeout(() => {
+    syncActiveTenders({ trigger: 'startup' });
+  }, 8000);
+} else {
+  console.log('🗂️  Active-tenders sync: running on Vercel — node-cron skipped, using Vercel Cron Jobs instead (see vercel.json)');
+}
