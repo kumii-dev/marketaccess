@@ -449,21 +449,37 @@ export async function syncActiveTenders({ trigger = 'manual', maxPagesThisRun = 
 // ── Read helper for GET /api/active-tenders ───────────────────────────────────
 export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
   const admin = getAdmin();
+  const nowIso = new Date().toISOString();
 
-  const { data, error } = await admin
-    .from('active_tenders')
-    .select('release, province, closing_date, synced_at')
-    .order('closing_date', { ascending: true }) // closing soonest first; nulls last
-    .limit(limit);
+  // IMPORTANT: PostgREST/Supabase silently caps any single .select() response
+  // at a project-level "Max Rows" setting (defaults to 1000) REGARDLESS of an
+  // explicit .limit() in code. Previously this route fetched *all* rows
+  // (open + already-closed) ordered by closing_date ascending, so the closed
+  // tenders (sorting first) ate into that 1000-row cap and silently truncated
+  // the open tenders returned — e.g. 587 closed + only 413 of ~1400 open ones
+  // actually made it back, even though the DB had 1987 total rows.
+  //
+  // Fix: (1) filter for open tenders directly in the query (closing_date is
+  // null OR in the future) so closed rows never consume the row cap, and
+  // (2) paginate with .range() in case the open-tender count itself exceeds
+  // the PostgREST cap, so growth beyond ~1000 open tenders doesn't regress.
+  const pageSize = 1000;
+  let allRows = [];
+  for (let from = 0; from < limit; from += pageSize) {
+    const to = Math.min(from + pageSize, limit) - 1;
+    const { data, error } = await admin
+      .from('active_tenders')
+      .select('release, province, closing_date, synced_at')
+      .or(`closing_date.is.null,closing_date.gte.${nowIso}`)
+      .order('closing_date', { ascending: true }) // closing soonest first; nulls last
+      .range(from, to);
 
-  if (error) throw error;
+    if (error) throw error;
+    allRows = allRows.concat(data || []);
+    if (!data || data.length < (to - from + 1)) break; // last page reached
+  }
 
-  const now = Date.now();
-
-  // Safety net: exclude anything that expired between hourly prunes.
-  const rows = (data || []).filter(
-    row => !row.closing_date || new Date(row.closing_date).getTime() >= now
-  );
+  const rows = allRows;
 
   // Inject province into release.tender.province so FilterBar / App.jsx filters
   // work without changes (the OCDS API omits this field; we derived it at sync
@@ -488,7 +504,7 @@ export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
   }
 
   // Most recent upsert timestamp across the returned rows = data freshness.
-  const syncedAt = (data || []).reduce(
+  const syncedAt = allRows.reduce(
     (max, row) => (row.synced_at > max ? row.synced_at : max),
     _lastSyncAt || null
   );
