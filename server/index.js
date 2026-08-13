@@ -40,6 +40,17 @@ function enrichWithProvince(release) {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// 🔒 SECURITY/CORRECTNESS: Vercel's edge network always adds an
+// `X-Forwarded-For` header. Without telling Express to trust it, this
+// currently just logs a noisy ValidationError from express-rate-limit on
+// every request (rate limiting still nominally works via req.ip, but the
+// IP it sees is wrong and the console fills with warnings). `1` trusts
+// exactly one hop (Vercel's proxy) — appropriate since we're always behind
+// exactly one reverse proxy on Vercel, and is a no-op locally.
+if (process.env.VERCEL) {
+  app.set('trust proxy', 1);
+}
+
 // 🔒 SECURITY: Configure CORS (TODO: Whitelist specific origins in production)
 app.use(cors({
   origin: '*', // ⚠️ WARNING: Allow all origins (change in production)

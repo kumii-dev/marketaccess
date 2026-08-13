@@ -42,6 +42,7 @@ const SmartMatchedTenders = () => {
   const [aiAnalysis, setAiAnalysis] = useState(new Map());
   const [aiSummary, setAiSummary] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
   const [extractedKeywords, setExtractedKeywords] = useState([]);
   
   // Ref to track latest matched tenders for AI enhancement
@@ -476,6 +477,7 @@ const SmartMatchedTenders = () => {
   const enhanceWithAI = async (tenders, profile) => {
     try {
       setAiLoading(true);
+      setAiError(null);
       console.log('🤖 Starting AI enhancement with keyword-based analysis...');
 
       // Log AI matching trigger (NIST AI RMF GOVERN, ISO 27001 A.12.4.1)
@@ -564,6 +566,7 @@ const SmartMatchedTenders = () => {
       
       if (!keywords || keywords.length === 0) {
         console.warn('⚠️ No keywords extracted, skipping AI enhancement');
+        setAiError('AI insights are temporarily unavailable. Your tender matches above are unaffected.');
         setAiLoading(false);
         return;
       }
@@ -632,6 +635,7 @@ const SmartMatchedTenders = () => {
       });
     } catch (err) {
       console.error('❌ AI enhancement error:', err);
+      setAiError('AI insights are temporarily unavailable. Your tender matches above are unaffected.');
       // Don't throw - AI is optional enhancement
     } finally {
       setAiLoading(false);
@@ -1406,6 +1410,14 @@ const SmartMatchedTenders = () => {
                       <div className="ai-loading-notice">
                         <i className="bi bi-stars spinning"></i>
                         <span>AI is analyzing your top matches for deeper insights...</span>
+                      </div>
+                    )}
+
+                    {/* AI Error State */}
+                    {aiError && !aiLoading && (
+                      <div className="ai-loading-notice" style={{ opacity: 0.85 }}>
+                        <i className="bi bi-exclamation-triangle"></i>
+                        <span>{aiError}</span>
                       </div>
                     )}
                     
