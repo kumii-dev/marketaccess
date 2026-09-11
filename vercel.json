@@ -39,8 +39,8 @@
   ],
   "crons": [
     {
-      "path": "/api/active-tenders/sync?maxPages=20",
-      "schedule": "0 5 * * *"
+      "path": "/api/active-tenders/sync?maxPages=3",
+      "schedule": "0 */4 * * *"
     }
   ],
   "env": {

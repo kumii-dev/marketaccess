@@ -27,7 +27,7 @@ import auditLogger, { AuditEventCategory, AuditLogLevel } from '../utils/auditLo
 import { logSystemError } from '../utils/auditLogger';
 import './SmartMatchedTenders.css';
 
-const SmartMatchedTenders = () => {
+const SmartMatchedTenders = ({ onNavigate } = {}) => {
   const [authToken, setAuthToken] = useState(null);
   const [profileData, setProfileData] = useState(null);
   const [allTenders, setAllTenders] = useState([]);
@@ -38,6 +38,10 @@ const SmartMatchedTenders = () => {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [isWaitingForAuth, setIsWaitingForAuth] = useState(true);
+  // Set when the active_tenders store itself had to fall back to a cached /
+  // static snapshot (i.e. the eTenders gov API is offline/undergoing
+  // maintenance). Mirrors the notice shown on the Browse Opportunities page.
+  const [fallbackNotice, setFallbackNotice] = useState('');
   const [_matchingScore, setMatchingScore] = useState({});
   const [aiAnalysis, setAiAnalysis] = useState(new Map());
   const [aiSummary, setAiSummary] = useState(null);
@@ -267,155 +271,73 @@ const SmartMatchedTenders = () => {
           return; // Skip fetching
         }
 
-        // PHASE 1: Quick initial load (10 tenders)
-        console.log('🚀 Phase 1: Loading initial 10 tenders...');
-        const initialData = await fetchTenders({
-          page: 1,
-          limit: 10,
-          dateFrom,
-          dateTo
-        });
+        // PHASE 1: Load from the Supabase `active_tenders` store — this is the
+        // SAME resilient store the Browse Opportunities page reads from. It is
+        // populated by a background cron (see server/services/tenderSync.js)
+        // completely independently of the live eTenders gov API, so Smart
+        // Matched Tenders keeps working even when eTenders itself is offline
+        // or undergoing maintenance.
+        //
+        // IMPORTANT: fetchTenders() only takes this fast Supabase path when
+        // NO `page`/`limit`/`offset` args are passed (see src/lib/api.js) —
+        // previously this component always passed `page`/`limit`, which
+        // skipped the active_tenders store entirely and hit the flaky live
+        // eTenders proxy (/api/tenders) on every call, batch after batch.
+        console.log('� Loading tenders from active_tenders store (resilient to eTenders outages)...');
+        const tendersData = await fetchTenders({ dateFrom, dateTo });
 
-        let initialTenders = [];
-        if (initialData.results) {
-          initialTenders = initialData.results;
-        } else if (initialData.data) {
-          initialTenders = initialData.data;
-        } else if (Array.isArray(initialData)) {
-          initialTenders = initialData;
+        let fetchedTenders = [];
+        if (tendersData.results) {
+          fetchedTenders = tendersData.results;
+        } else if (tendersData.data) {
+          fetchedTenders = tendersData.data;
+        } else if (Array.isArray(tendersData)) {
+          fetchedTenders = tendersData;
         }
 
-        // Show initial matches immediately
-        if (initialTenders.length > 0) {
-          setAllTenders(initialTenders);
-          const initialMatched = matchTendersToProfile(initialTenders, profile);
-          setMatchedTenders(initialMatched);
-          latestMatchedRef.current = initialMatched; // Store for AI enhancement
-          setLoadingProgress({ current: 10, total: 100, percentage: 10 });
-          
-          console.log(`✅ Initial ${initialTenders.length} tenders loaded and matched`);
-          
-          // Start AI enhancement immediately with first 10 tenders
-          if (initialMatched.length > 0) {
-            console.log('🤖 Starting early AI enhancement with initial tenders...');
-            enhanceWithAI(initialMatched, profile);
+        // Surface the same "eTenders offline" notice used elsewhere in the app
+        // when the store itself had to fall back to a cached/static snapshot.
+        if (tendersData.isFallback) {
+          setFallbackNotice(
+            tendersData.fallbackMsg ||
+            'eTenders API is currently offline / undergoing maintenance - Please try again in afew minutes'
+          );
+        } else {
+          setFallbackNotice('');
+        }
+
+        if (fetchedTenders.length > 0) {
+          setAllTenders(fetchedTenders);
+          const matched = matchTendersToProfile(fetchedTenders, profile);
+          setMatchedTenders(matched);
+          latestMatchedRef.current = matched;
+          setLoadingProgress({ current: 100, total: 100, percentage: 100 });
+
+          console.log(`✅ Loaded ${fetchedTenders.length} tenders — ${matched.length} matched profile`);
+
+          // Cache the full set for next reload / cross-device / offline use
+          cacheTenders(fetchedTenders, dateFrom, dateTo);
+          saveTendersToIDB(fetchedTenders, dateFrom, dateTo).then(() => {
+            console.log('💾 Saved tenders to IndexedDB for next reload');
+          });
+          saveTendersToSupabase(fetchedTenders, dateFrom, dateTo).then(() => {
+            console.log('☁️ Saved tenders to Supabase for cross-device sync');
+          }).catch(err => {
+            console.warn('⚠️ Failed to save to Supabase (local cache still available):', err.message);
+          });
+
+          // Run AI enhancement once against the full matched set
+          if (matched.length > 0) {
+            console.log('🤖 Running AI enhancement...');
+            enhanceWithAI(matched, profile);
           }
+        } else {
+          console.warn('⚠️ No tenders returned from active_tenders store or fallback chain');
         }
 
-        // Initial loading complete - user can see results now
         setLoading(false);
-
-        // PHASE 2: Progressive background loading (90 more tenders in batches of 10)
-        console.log('🔄 Phase 2: Loading additional tenders in background...');
-        setIsLoadingMore(true);
-        
-        const batches = [
-          { page: 2, limit: 10 },  // 11-20
-          { page: 3, limit: 10 },  // 21-30
-          { page: 4, limit: 10 },  // 31-40
-          { page: 5, limit: 10 },  // 41-50
-          { page: 6, limit: 10 },  // 51-60
-          { page: 7, limit: 10 },  // 61-70
-          { page: 8, limit: 10 },  // 71-80
-          { page: 9, limit: 10 },  // 81-90
-          { page: 10, limit: 10 }  // 91-100
-        ];
-
-        for (let i = 0; i < batches.length; i++) {
-          const batch = batches[i];
-          
-          try {
-            const batchData = await fetchTenders({
-              page: batch.page,
-              limit: batch.limit,
-              dateFrom,
-              dateTo
-            });
-
-            let batchTenders = [];
-            if (batchData.results) {
-              batchTenders = batchData.results;
-            } else if (batchData.data) {
-              batchTenders = batchData.data;
-            } else if (Array.isArray(batchData)) {
-              batchTenders = batchData;
-            }
-
-            if (batchTenders.length > 0) {
-              // Append new tenders and get the updated matched tenders
-              let updatedMatched = [];
-              setAllTenders(prev => {
-                // Deduplicate: filter out tenders that already exist (by ocid or id)
-                const existingIds = new Set(
-                  prev.map(t => t.ocid || t.id).filter(Boolean)
-                );
-                const newTenders = batchTenders.filter(t => {
-                  const tenderId = t.ocid || t.id;
-                  return tenderId && !existingIds.has(tenderId);
-                });
-                
-                const combined = [...prev, ...newTenders];
-                console.log(`📦 Batch ${i + 1}: ${batchTenders.length} fetched, ${newTenders.length} new (${existingIds.size} duplicates filtered)`);
-                
-                // Re-match with all tenders so far
-                const newMatched = matchTendersToProfile(combined, profile);
-                setMatchedTenders(newMatched);
-                
-                // Update ref with latest matches
-                latestMatchedRef.current = newMatched;
-                updatedMatched = newMatched;
-                
-                // Cache the combined result after last batch
-                if (i === batches.length - 1) {
-                  cacheTenders(combined, dateFrom, dateTo);
-                  
-                  // Save to IndexedDB for persistent cache
-                  saveTendersToIDB(combined, dateFrom, dateTo).then(() => {
-                    console.log('💾 Saved all tenders to IndexedDB for next reload');
-                  });
-                  
-                  // Save to Supabase for cross-device sync
-                  saveTendersToSupabase(combined, dateFrom, dateTo).then(() => {
-                    console.log('☁️ Saved all tenders to Supabase for cross-device sync');
-                  }).catch(err => {
-                    console.warn('⚠️ Failed to save to Supabase (local cache still available):', err.message);
-                  });
-                }
-                
-                return combined;
-              });
-
-              const currentCount = 10 + (i + 1) * 10;
-              const percentage = Math.round((currentCount / 100) * 100);
-              setLoadingProgress({ current: currentCount, total: 100, percentage });
-              
-              console.log(`📦 Batch ${i + 1}/9 loaded: +${batchTenders.length} tenders (Total: ${currentCount})`);
-              
-              // Run AI enhancement on batches 1, 3, 5, 7, and 9 (every other batch + last)
-              const batchNumber = i + 1;
-              const shouldRunAI = batchNumber === 1 || batchNumber === 3 || batchNumber === 5 || batchNumber === 7 || batchNumber === 9;
-              
-              if (shouldRunAI && updatedMatched.length > 0) {
-                console.log(`🤖 Running AI enhancement for batch ${batchNumber}/9 with ${updatedMatched.length} matched tenders`);
-                enhanceWithAI(updatedMatched, profile);
-              } else if (updatedMatched.length > 0) {
-                console.log(`⏭️ Skipping AI enhancement for batch ${batchNumber}/9 (will run on batches 1,3,5,7,9)`);
-              }
-            }
-
-            // Small delay between batches to avoid overwhelming the API
-            if (i < batches.length - 1) {
-              await new Promise(resolve => setTimeout(resolve, 300));
-            }
-          } catch (batchError) {
-            console.error(`Error loading batch ${i + 1}:`, batchError);
-            // Continue with next batch even if one fails
-          }
-        }
-
         setIsLoadingMore(false);
-        console.log('✅ All tenders loaded successfully');
-        console.log('🎯 AI enhancement ran after each batch - all done!');
+        console.log('✅ Tender load complete');
 
       } catch (err) {
         console.error('Error fetching data:', err);
@@ -433,15 +355,13 @@ const SmartMatchedTenders = () => {
   // Background fetch function for stale-while-revalidate pattern
   const fetchFreshDataInBackground = async (dateFrom, dateTo) => {
     try {
-      console.log('🔄 Background refresh: Fetching latest tenders...');
-      
-      // Fetch first 100 tenders (10 pages)
-      const freshData = await fetchTenders({
-        page: 1,
-        limit: 100,
-        dateFrom,
-        dateTo
-      });
+      console.log('🔄 Background refresh: Fetching latest tenders from active_tenders store...');
+
+      // No page/limit/offset here — this takes the fast, resilient
+      // active_tenders Supabase path (see fetchTenders() in src/lib/api.js),
+      // same as the primary load above, instead of hitting the flaky live
+      // eTenders proxy.
+      const freshData = await fetchTenders({ dateFrom, dateTo });
 
       let freshTenders = [];
       if (freshData.results) {
@@ -450,6 +370,15 @@ const SmartMatchedTenders = () => {
         freshTenders = freshData.data;
       } else if (Array.isArray(freshData)) {
         freshTenders = freshData;
+      }
+
+      if (freshData.isFallback) {
+        setFallbackNotice(
+          freshData.fallbackMsg ||
+          'eTenders API is currently offline / undergoing maintenance - Please try again in afew minutes'
+        );
+      } else {
+        setFallbackNotice('');
       }
 
       if (freshTenders.length > 0) {
@@ -1314,11 +1243,34 @@ const SmartMatchedTenders = () => {
           <p className="smart-matched-description">
             Hi {getUserDisplayName(profileData)}, we have auto-matched your business profile to tender opportunities.
           </p>
+          {onNavigate && (
+            <div className="header-actions">
+              <button className="header-btn header-btn-secondary" onClick={() => onNavigate('government-tenders')}>
+                Browse Opportunities
+              </button>
+              <button className="header-btn header-btn-primary" onClick={() => onNavigate('smart-matched-tenders')}>
+                Smart Matched Tenders
+              </button>
+              <button className="header-btn header-btn-secondary" onClick={() => onNavigate('my-tenders')}>
+                <i className="bi bi-folder2-open"></i> My Tenders
+              </button>
+            </div>
+          )}
         </div>
       </header>
 
       <main className="smart-matched-main">
         <div className="container">
+          {/* Fallback notice — shown when active_tenders had to fall back to a
+              cached/static snapshot because the live eTenders API is offline */}
+          {fallbackNotice && (
+            <div className="fallback-notice" role="alert">
+              <span className="fallback-notice__icon">⚠️</span>
+              <span className="fallback-notice__text">{fallbackNotice}</span>
+              <button className="fallback-notice__retry" onClick={handleRetry}>Retry live data</button>
+            </div>
+          )}
+
           {loading && <LoadingSpinner />}
 
           {error && !loading && (

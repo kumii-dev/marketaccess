@@ -117,6 +117,44 @@ All messages follow this envelope shape:
 | `type` | Payload | Child action |
 |---|---|---|
 | `KUMII_AUTH_TOKEN` | `{ token: string }` | Child stores JWT, unblocks all API calls |
+| `KUMII_SET_VIEW` (alias: `NAVIGATE_TO_VIEW`) | `{ view: string }` | Child switches to the requested internal page — see §3a |
+
+### 3a. Deep-linking into a specific Market Access page
+
+The host can direct users straight to **Browse Opportunities**, **Smart
+Matched Tenders**, or **My Tenders** in one of two ways:
+
+**Option A — set the iframe `src` with a `view` query param** (use this when
+creating a *new* iframe / navigating the host route, e.g. a sidebar link):
+
+```
+https://module.vercel.app/?view=government-tenders     (Browse Opportunities — default)
+https://module.vercel.app/?view=smart-matched-tenders   (Smart Matched Tenders)
+https://module.vercel.app/?view=my-tenders              (My Tenders)
+```
+
+**Option B — postMessage into an already-loaded iframe** (use this when the
+iframe is already mounted and you just want to switch its page without a
+reload, e.g. clicking a nav button in the host's persistent shell):
+
+```js
+document.getElementById('market-access-iframe').contentWindow.postMessage(
+  { type: 'KUMII_SET_VIEW', view: 'smart-matched-tenders' },
+  'https://module.vercel.app' // prefer an explicit origin over '*' in production
+);
+```
+
+`view` accepts: `government-tenders` | `smart-matched-tenders` | `my-tenders`
+(`private-tenders` also exists but is currently hidden from the in-app nav).
+
+The child mirrors whichever section is active back into its own URL
+(`?view=...`) via `history.replaceState`, so a manual iframe reload preserves
+the last-viewed page.
+
+
+| `type` | Payload | Child action |
+|---|---|---|
+| `KUMII_AUTH_TOKEN` | `{ token: string }` | Child stores JWT, unblocks all API calls |
 
 ---
 

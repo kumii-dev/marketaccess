@@ -71,7 +71,15 @@ const DEFAULT_PAGES_PER_RUN = Number(process.env.TENDER_SYNC_PAGES_PER_RUN || 5)
 // keeping sync time well within the gov server's tolerance. Env-overridable via
 // TENDER_SYNC_LOOKBACK_DAYS.
 const LOOKBACK_DAYS      = Number(process.env.TENDER_SYNC_LOOKBACK_DAYS || 180);
-const REQUEST_TIMEOUT_MS = 120000; // 2 min — the gov API can be very slow
+// ⚠️ MUST stay comfortably under the Vercel function's `maxDuration` (60s in
+// vercel.json). Previously this was 120000ms (2 min) — longer than the
+// function's own execution budget, which meant Vercel would hard-kill the
+// invocation mid-fetch before this timeout (or any retry logic) ever fired.
+// The function died silently on almost every cron run: no cursor save, no
+// upsert, no recorded error — active_tenders just went stale forever. Keep
+// this short so a slow page fails FAST and the run can still save partial
+// progress / retry next invocation within its time budget.
+const REQUEST_TIMEOUT_MS = 20000; // 20s per page
 const UPSERT_CHUNK       = 500;
 
 // ── Province inference ────────────────────────────────────────────────────────
@@ -252,17 +260,19 @@ export async function fetchOpenReleasesFromApi(maxPagesThisRun = DEFAULT_PAGES_P
     let pageReleases = null;
 
     // The eTenders IIS API is slow & flaky (frequent ECONNABORTED/500s). Retry
-    // each page a couple of times with a short backoff before giving up, so a
-    // single transient blip doesn't truncate the whole dataset.
-    for (let attempt = 1; attempt <= 3; attempt++) {
+    // once with a short backoff before giving up on this page — kept to just
+    // 2 attempts (not 3) so a single bad page can't alone exceed the Vercel
+    // function's maxDuration budget (20s timeout × 2 attempts + backoff ≈ 42s,
+    // leaving headroom for the rest of this run within the 60s window).
+    for (let attempt = 1; attempt <= 2; attempt++) {
       try {
         pageReleases = await fetchPage(page, dateFrom, dateTo);
         break;
       } catch (err) {
         const code = err.response?.status || err.code || err.message;
-        if (attempt < 3) {
+        if (attempt < 2) {
           console.warn(`[tender-sync] page ${page} attempt ${attempt} failed (${code}) — retrying...`);
-          await sleep(1500 * attempt);
+          await sleep(1000);
         } else {
           console.warn(`[tender-sync] page ${page} failed after ${attempt} attempts (${code}) — stopping this run, will retry next invocation`);
         }

@@ -18,12 +18,30 @@ import { logAuthSuccess, logAuthFailure, logSystemError } from './utils/auditLog
 import auditLogger, { AuditEventCategory, AuditLogLevel } from './utils/auditLogger';
 import './App.css';
 
+// Valid sections the parent platform is allowed to deep-link into.
+const VALID_SECTIONS = ['government-tenders', 'smart-matched-tenders', 'my-tenders', 'private-tenders'];
+
 function App() {
   const [allTenders, setAllTenders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [currentSection, setCurrentSection] = useState('government-tenders');
+  // Resolve the initial section from the URL so the parent platform can deep-link
+  // straight into a specific page by setting the iframe `src` to e.g.
+  //   https://module.vercel.app/?view=smart-matched-tenders
+  //   https://module.vercel.app/?view=my-tenders
+  // Accepts either `view` or `section` as the query param name.
+  const getSectionFromURL = () => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const requested = params.get('view') || params.get('section');
+      return VALID_SECTIONS.includes(requested) ? requested : 'government-tenders';
+    } catch {
+      return 'government-tenders';
+    }
+  };
+
+  const [currentSection, setCurrentSection] = useState(getSectionFromURL);
   const [loadingProgress, setLoadingProgress] = useState({ current: 0, total: 100, percentage: 0 });
   const [loadingStatus, setLoadingStatus] = useState('Fetching latest tenders...');
   const [loadingSubStatus, setLoadingSubStatus] = useState('');
@@ -63,6 +81,41 @@ function App() {
       console.warn('⚠️ Supabase sync on mount failed:', err.message);
     });
   }, []);
+
+  // 🔗 PARENT PLATFORM NAVIGATION: Listen for postMessage from the Kumii host
+  // asking this module to switch pages, without reloading the iframe.
+  //   window.iframeEl.contentWindow.postMessage(
+  //     { type: 'KUMII_SET_VIEW', view: 'smart-matched-tenders' }, '*'
+  //   );
+  // `view` accepts: 'government-tenders' | 'smart-matched-tenders' | 'my-tenders' | 'private-tenders'
+  // Also mirrors the section into the URL (via history.replaceState) so a
+  // page refresh preserves the current view.
+  useEffect(() => {
+    const handleParentNavigation = (event) => {
+      const { type, view, section } = event.data || {};
+      if (type !== 'KUMII_SET_VIEW' && type !== 'NAVIGATE_TO_VIEW') return;
+      const requested = view || section;
+      if (VALID_SECTIONS.includes(requested)) {
+        setCurrentSection(requested);
+      }
+    };
+    window.addEventListener('message', handleParentNavigation);
+    return () => window.removeEventListener('message', handleParentNavigation);
+  }, []);
+
+  // Keep the URL's `view` query param in sync with the active section so that
+  // reloading the iframe (or the parent re-reading iframe.src) reflects the
+  // current page, and so the deep-link URLs above stay shareable.
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.set('view', currentSection);
+      const newUrl = `${window.location.pathname}?${params.toString()}`;
+      window.history.replaceState(null, '', newUrl);
+    } catch {
+      // no-op — non-browser environment or restricted history API
+    }
+  }, [currentSection]);
 
   // 📊 AUDIT: Listen for Supabase auth state changes and emit audit events
   // ISO 27001 A.9.4.1 — Information Access Restriction
@@ -381,7 +434,7 @@ function App() {
 
       // Show fallback notice if the API was unavailable
       if (apiData?.isFallback) {
-        setFallbackNotice(apiData.fallbackMsg || 'Showing cached tenders — live data unavailable.');
+        setFallbackNotice(apiData.fallbackMsg || 'eTenders API is currently offline / undergoing maintenance - Please try again in afew minutes');
       } else {
         setFallbackNotice('');
       }
@@ -584,7 +637,7 @@ function App() {
           currentSection={currentSection} 
           onSectionChange={handleSectionChange}
         /> */}
-        <SmartMatchedTenders />
+        <SmartMatchedTenders onNavigate={handleSectionChange} />
       </div>
     );
   }
@@ -593,7 +646,7 @@ function App() {
   if (currentSection === 'my-tenders') {
     return (
       <div className="app">
-        <MyTendersPage onBack={() => handleSectionChange('government-tenders')} />
+        <MyTendersPage onBack={() => handleSectionChange('government-tenders')} onNavigate={handleSectionChange} />
       </div>
     );
   }

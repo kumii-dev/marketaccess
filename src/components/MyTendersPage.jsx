@@ -60,7 +60,7 @@ function draftCompleteness(row) {
   return Math.round((filled / (sections.length + jsonSections.length)) * 100);
 }
 
-export default function MyTendersPage({ onBack }) {
+export default function MyTendersPage({ onBack, onNavigate }) {
   const [rows, setRows]           = useState([]);
   const [loading, setLoading]     = useState(true);
   const [error, setError]         = useState(null);
@@ -281,6 +281,19 @@ export default function MyTendersPage({ onBack }) {
         <button className="mtp-back-btn" onClick={onBack}>
           <i className="bi bi-arrow-left"></i> Back
         </button>
+        {onNavigate && (
+          <div className="header-actions">
+            <button className="header-btn header-btn-secondary" onClick={() => onNavigate('government-tenders')}>
+              Browse Opportunities
+            </button>
+            <button className="header-btn header-btn-secondary" onClick={() => onNavigate('smart-matched-tenders')}>
+              Smart Matched Tenders
+            </button>
+            <button className="header-btn header-btn-primary" onClick={() => onNavigate('my-tenders')}>
+              <i className="bi bi-folder2-open"></i> My Tenders
+            </button>
+          </div>
+        )}
         <div className="mtp-header-row">
           <div>
             <h1 className="mtp-title">

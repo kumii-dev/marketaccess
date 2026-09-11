@@ -139,7 +139,7 @@ export const fetchTenders = async ({
             results:     filtered,
             total:       filtered.length,
             isFallback:  true,
-            fallbackMsg: `eTenders is currently unavailable. Showing cached tenders from ${cached.date}.`,
+            fallbackMsg: `eTenders API is currently offline / undergoing maintenance - Please try again in afew minutes (showing cached tenders from ${cached.date})`,
             fallbackSource: cached.source,
             fallbackDate:   cached.date,
           };
@@ -166,7 +166,7 @@ export const fetchTenders = async ({
         results:        filtered,
         total:          filtered.length,
         isFallback:     true,
-        fallbackMsg:    'eTenders is currently unavailable. Showing cached tenders.',
+        fallbackMsg:    'eTenders API is currently offline / undergoing maintenance - Please try again in afew minutes',
         fallbackSource: 'static',
         fallbackDate:   null,
       };

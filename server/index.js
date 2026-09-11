@@ -236,8 +236,15 @@ app.get('/api/tenders', async (req, res) => {
       } catch (err) {
         const status = err.response?.status;
         console.warn(`⚠️ API ${status || err.code} for dateFrom=${candidateFrom}`);
-        if (!err.response || status === 500 || status === 502 || status === 503) continue;
-        throw err; // non-retryable (400, 401, etc.)
+        // Try the next (narrower/wider) candidate window regardless of the
+        // upstream status code. The gov OCDS API has been observed returning
+        // 404s (not just 500/502/503) during outages/maintenance — treating
+        // those as "non-retryable" previously caused an immediate `throw`
+        // here that skipped every remaining candidate AND the static-fallback
+        // block below, propagating a raw upstream 404 straight to the client
+        // and breaking the page instead of degrading gracefully. Any failure
+        // (4xx or 5xx) just moves on to the next candidate / final fallback.
+        continue;
       }
     }
 
@@ -262,7 +269,7 @@ app.get('/api/tenders', async (req, res) => {
         dateFrom:    FALLBACK_SNAPSHOT.PublishedDate || null,
         dateTo:      FALLBACK_SNAPSHOT.PublishedDate || null,
         isFallback:  true,
-        fallbackMsg: 'eTenders is currently unavailable. Showing cached tenders.',
+        fallbackMsg: 'eTenders API is currently offline / undergoing maintenance - Please try again in afew minutes',
       });
     }
 
