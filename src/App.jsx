@@ -21,6 +21,15 @@ import './App.css';
 // Valid sections the parent platform is allowed to deep-link into.
 const VALID_SECTIONS = ['government-tenders', 'smart-matched-tenders', 'my-tenders', 'private-tenders'];
 
+// Short-hand aliases the parent platform may use in the `?view=` query param
+// (e.g. https://kumii.africa/access-to-market?view=smart-matched), mapped to
+// the internal section name this app actually uses.
+const SECTION_ALIASES = {
+  'smart-matched': 'smart-matched-tenders',
+  'private': 'private-tenders',
+  'tenders': 'government-tenders',
+};
+
 function App() {
   const [allTenders, setAllTenders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,14 +37,15 @@ function App() {
   const [currentPage, setCurrentPage] = useState(1);
   // Resolve the initial section from the URL so the parent platform can deep-link
   // straight into a specific page by setting the iframe `src` to e.g.
-  //   https://module.vercel.app/?view=smart-matched-tenders
+  //   https://module.vercel.app/?view=smart-matched-tenders  (or ?view=smart-matched)
   //   https://module.vercel.app/?view=my-tenders
   // Accepts either `view` or `section` as the query param name.
   const getSectionFromURL = () => {
     try {
       const params = new URLSearchParams(window.location.search);
       const requested = params.get('view') || params.get('section');
-      return VALID_SECTIONS.includes(requested) ? requested : 'government-tenders';
+      const resolved = SECTION_ALIASES[requested] || requested;
+      return VALID_SECTIONS.includes(resolved) ? resolved : 'government-tenders';
     } catch {
       return 'government-tenders';
     }
@@ -95,8 +105,9 @@ function App() {
       const { type, view, section } = event.data || {};
       if (type !== 'KUMII_SET_VIEW' && type !== 'NAVIGATE_TO_VIEW') return;
       const requested = view || section;
-      if (VALID_SECTIONS.includes(requested)) {
-        setCurrentSection(requested);
+      const resolved = SECTION_ALIASES[requested] || requested;
+      if (VALID_SECTIONS.includes(resolved)) {
+        setCurrentSection(resolved);
       }
     };
     window.addEventListener('message', handleParentNavigation);

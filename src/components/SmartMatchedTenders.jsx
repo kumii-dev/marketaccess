@@ -27,6 +27,25 @@ import auditLogger, { AuditEventCategory, AuditLogLevel } from '../utils/auditLo
 import { logSystemError } from '../utils/auditLogger';
 import './SmartMatchedTenders.css';
 
+// Derive a "low" / "medium" / "high" confidence label from the SAME score
+// value that is actually displayed to the user (the star match-score badge).
+//
+// Previously the confidence badge showed the AI's own, entirely independent
+// `confidenceLevel` field (returned alongside its own separate `matchScore`
+// from /api/ai/batch-analyze). That AI-side score is frequently much lower
+// than the local keyword-matching score shown in the star badge (e.g. the
+// star badge showed 100 while the AI's own internal score was 25 — hence a
+// "100" tender visibly labelled "low confidence", which looked like a bug).
+// Deriving confidence directly from the displayed score keeps the two values
+// consistent with each other, using the same <40 / 40-69 / 70+ thresholds
+// already used elsewhere in this codebase (see aiSecurityControls.js).
+function getConfidenceForScore(score) {
+  const s = Number(score) || 0;
+  if (s >= 70) return 'high';
+  if (s >= 40) return 'medium';
+  return 'low';
+}
+
 const SmartMatchedTenders = ({ onNavigate } = {}) => {
   const [authToken, setAuthToken] = useState(null);
   const [profileData, setProfileData] = useState(null);
@@ -520,15 +539,25 @@ const SmartMatchedTenders = ({ onNavigate } = {}) => {
 
       // Step 2: Analyze top tenders using keywords (process in batches)
       const analysisResults = new Map();
-      
-      // Split tenders into batches of 10
-      const batchSize = 10;
+
+      // ⚠️ RATE LIMIT: The server's /api/ai/batch-analyze endpoint allows only
+      // 10 batch operations/hour (see server/middleware/rateLimiters.js
+      // `batchOperationLimiter`) — ONE HTTP request = one batch operation,
+      // regardless of how many tenders are inside that request. A fixed
+      // batchSize of 10 tenders/request meant a normal load of ~200 matched
+      // tenders needed ~21 requests, so 15+ silently 429'd and those tenders
+      // never got AI analysis (they just showed the local keyword-match score
+      // with no AI reasons/confidence). Size the batch dynamically so the
+      // total number of requests stays safely under the hourly cap (9, not
+      // 10, to leave headroom for the background refresh's own AI pass).
+      const MAX_BATCH_REQUESTS = 9;
+      const batchSize = Math.max(10, Math.ceil(tenders.length / MAX_BATCH_REQUESTS));
       const batches = [];
       for (let i = 0; i < tenders.length; i += batchSize) {
         batches.push(tenders.slice(i, i + batchSize));
       }
 
-      console.log(`📊 Processing ${batches.length} batches (${tenders.length} total tenders)`);
+      console.log(`📊 Processing ${batches.length} batches of ~${batchSize} (${tenders.length} total tenders)`);
 
       // Process each batch (analyzing top 2 per batch)
       for (let i = 0; i < batches.length; i++) {
@@ -1677,6 +1706,11 @@ const SmartMatchedTenders = ({ onNavigate } = {}) => {
                       {(() => {
                         const tenderId = tender.ocid || tender.id || tenderKey;
                         const aiInfo = aiAnalysis.get(tenderId);
+                        // Confidence label is derived from the score actually
+                        // displayed in the star badge above (tender.matchScore),
+                        // NOT the AI's own independent confidenceLevel — see
+                        // getConfidenceForScore() for why.
+                        const displayConfidence = getConfidenceForScore(tender.matchScore);
                       
                       // Show AI analysis if available, otherwise show basic reasons
                       if (aiInfo && aiInfo.reasons && aiInfo.reasons.length > 0) {
@@ -1685,8 +1719,8 @@ const SmartMatchedTenders = ({ onNavigate } = {}) => {
                             <div className="match-reasons-header">
                               <i className="bi bi-stars"></i>
                               <span>AI-Powered Match Analysis:</span>
-                              <span className={`ai-confidence confidence-${aiInfo.confidence}`}>
-                                {aiInfo.confidence} confidence
+                              <span className={`ai-confidence confidence-${displayConfidence}`}>
+                                {displayConfidence} confidence
                               </span>
                             </div>
                             
