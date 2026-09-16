@@ -66,6 +66,32 @@ function draftCompleteness(row) {
   return Math.round((filled / (sections.length + jsonSections.length)) * 100);
 }
 
+/**
+ * Decode (not verify — verification happens server-side) the `email` claim
+ * straight out of a JWT's payload. This lets us auto-populate the "Deliver
+ * to" field for free, without an extra supabase.auth.getSession()/getUser()
+ * network round-trip — the token is already sitting in memory (tokenRef).
+ */
+function emailFromToken(token) {
+  if (!token) return '';
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return '';
+    const payloadB64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = payloadB64 + '='.repeat((4 - (payloadB64.length % 4)) % 4);
+    const json = decodeURIComponent(
+      atob(padded)
+        .split('')
+        .map(c => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join('')
+    );
+    const payload = JSON.parse(json);
+    return payload?.email || '';
+  } catch {
+    return '';
+  }
+}
+
 export default function MyTendersPage({ onBack, onNavigate }) {
   const [rows, setRows]           = useState([]);
   const [loading, setLoading]     = useState(true);
@@ -201,18 +227,21 @@ export default function MyTendersPage({ onBack, onNavigate }) {
   const [minScore, setMinScore]     = useState(40);
   const [subEnabled, setSubEnabled] = useState(true);
 
-  // Seed form from loaded subscription only. We intentionally do NOT
-  // auto-fetch the logged-in user's email via supabase.auth.getSession()
-  // when there's no subscription yet — that extra round-trip isn't needed
-  // for efficiency, and the user can simply type their email in below.
+  // Seed form from loaded subscription. When there's no subscription yet,
+  // still auto-populate "Deliver to" — but cheaply, by decoding the email
+  // claim already present in the in-memory JWT (tokenRef), rather than
+  // making an extra supabase.auth.getSession()/getUser() network call.
   useEffect(() => {
     if (subscription) {
       setUserEmail(subscription.email   || '');
       setFrequency(subscription.frequency || 'weekly');
       setMinScore(subscription.min_score  ?? 40);
       setSubEnabled(subscription.enabled ?? true);
+    } else if (!subLoading) {
+      const email = emailFromToken(tokenRef.current);
+      if (email) setUserEmail(email);
     }
-  }, [subscription]);
+  }, [subscription, subLoading, authGeneration]);
 
   const load = useCallback(async () => {
     setLoading(true);
