@@ -3,6 +3,11 @@ import { createPortal } from 'react-dom';
 import { supabase } from '../lib/supabase';
 import './TenderResponseModal.css';
 
+// Same base-URL resolution pattern as src/lib/api.js.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
+  ? import.meta.env.VITE_API_BASE_URL
+  : (import.meta.env.DEV ? 'http://localhost:3001' : '');
+
 // ── Collapsible Section ───────────────────────────────────────────
 function CollapsibleSection({ title, icon, children, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -56,10 +61,15 @@ function EditableText({ value, onChange, editMode, rows = 5, placeholder = '' })
  *   userProfile — { email, id, ... }
  *   rowId       — existing Supabase row id (for updates from My Tenders page)
  *   initialStatus — pre-fill status when opening a saved draft
+ *   authToken   — optional Bearer JWT (passed from MyTendersPage's tokenRef).
+ *                 When present, saves go through the server-authenticated
+ *                 /api/tender-responses proxy (routes/tenderResponses.js)
+ *                 instead of the direct Supabase client — avoiding the 401s
+ *                 iframe-embedded (Path B) sessions hit against RLS.
  *   onClose     — () => void
  *   onSaved     — () => void
  */
-export default function TenderResponseModal({ tender, draft, meta, userProfile, rowId, initialStatus, onClose, onSaved }) {
+export default function TenderResponseModal({ tender, draft, meta, userProfile, rowId, initialStatus, authToken, onClose, onSaved }) {
   // ── Editable content state (mirrors draft prop) ───────────────
   const [fields, setFields] = useState({
     executiveSummary:  draft?.executiveSummary  || '',
@@ -140,21 +150,44 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
         updated_at:         new Date().toISOString(),
       };
 
-      let dbError;
-      if (rowId) {
-        // UPDATE existing row by primary key
-        ({ error: dbError } = await supabase
-          .from('tender_responses')
-          .update(payload)
-          .eq('id', rowId));
+      // Prefer the server-authenticated proxy when we have a Bearer token
+      // (reliable for both direct-session and iframe/postMessage users —
+      // see routes/tenderResponses.js). Fall back to the direct Supabase
+      // client only when no token was supplied (e.g. standalone/dev usage
+      // outside MyTendersPage where auth.getSession() already works fine).
+      if (authToken) {
+        const url = rowId
+          ? `${API_BASE_URL}/api/tender-responses/${rowId}`
+          : `${API_BASE_URL}/api/tender-responses`;
+        const res = await fetch(url, {
+          method: rowId ? 'PUT' : 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          throw new Error(body.error || `Save failed (${res.status})`);
+        }
       } else {
-        // INSERT or upsert (new draft from TenderCard)
-        ({ error: dbError } = await supabase
-          .from('tender_responses')
-          .upsert(payload, { onConflict: 'user_id,tender_id' }));
+        let dbError;
+        if (rowId) {
+          // UPDATE existing row by primary key
+          ({ error: dbError } = await supabase
+            .from('tender_responses')
+            .update(payload)
+            .eq('id', rowId));
+        } else {
+          // INSERT or upsert (new draft from TenderCard)
+          ({ error: dbError } = await supabase
+            .from('tender_responses')
+            .upsert(payload, { onConflict: 'user_id,tender_id' }));
+        }
+        if (dbError) throw dbError;
       }
 
-      if (dbError) throw dbError;
       setSaved(true);
       setDirty(false);
       setEditMode(false);

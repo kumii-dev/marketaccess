@@ -24,6 +24,8 @@ import auditRoutes from './routes/audit.js';
 import auditAIRoutes from './routes/auditAI.js';
 import tenderDocsRouter from './routes/tenderDocs.js';
 import emailRoutes, { dispatchDigest } from './routes/email.js';
+import smartMatchRoutes from './routes/smartMatch.js';
+import tenderResponsesRoutes from './routes/tenderResponses.js';
 import { syncActiveTenders, getActiveTenders, getSyncStatus, inferProvince } from './services/tenderSync.js';
 
 // ── Province enrichment ───────────────────────────────────────────────────────
@@ -75,6 +77,14 @@ app.use('/api/tenders', tenderDocsRouter);
 
 // � EMAIL: Subscription management + digest dispatch
 app.use('/api/email', emailRoutes);
+
+// 🎯 SMART MATCH: Invoke-on-use matching + instant-alert email (NOT a cron —
+// triggered by the client on My Tenders / Smart Matched Tenders page load)
+app.use('/api/smart-match', smartMatchRoutes);
+
+// 📁 TENDER RESPONSES: Server-authenticated proxy for saved AI drafts
+// (fixes the 401s the browser Supabase client hit on the My Tenders page)
+app.use('/api/tender-responses', tenderResponsesRoutes);
 
 // �📊 AUDIT: Mount audit log receiver — ISO 27001, NIST SP 800-53, OWASP
 app.use('/admin/audit-logs', auditRoutes);

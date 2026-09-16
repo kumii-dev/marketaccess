@@ -4,6 +4,12 @@ import TenderResponseModal from './TenderResponseModal';
 import { useEmailSubscription } from '../hooks/useEmailSubscription';
 import './MyTendersPage.css';
 
+// Same base-URL resolution pattern as src/lib/api.js — empty string in
+// production means same-origin relative paths (Vercel serves both).
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL !== undefined
+  ? import.meta.env.VITE_API_BASE_URL
+  : (import.meta.env.DEV ? 'http://localhost:3001' : '');
+
 const STATUS_LABELS = {
   draft:       { label: 'Draft',       cls: 'mtp-badge--draft' },
   in_progress: { label: 'In Progress', cls: 'mtp-badge--progress' },
@@ -214,12 +220,25 @@ export default function MyTendersPage({ onBack, onNavigate }) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: dbErr } = await supabase
-        .from('tender_responses')
-        .select('*')
-        .order('updated_at', { ascending: false });
-      if (dbErr) throw dbErr;
-      setRows(data || []);
+      const token = tokenRef.current;
+      if (!token) {
+        // Auth hasn't arrived yet (Path A/B handshake still in flight) —
+        // the effect below will re-run load() once authGeneration bumps.
+        setRows([]);
+        return;
+      }
+      // Server-authenticated proxy — avoids the 401s the browser Supabase
+      // client hit here when the RLS session wasn't fully established for
+      // iframe-embedded (Path B) users. See routes/tenderResponses.js.
+      const res = await fetch(`${API_BASE_URL}/api/tender-responses`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Failed to load drafts (${res.status})`);
+      }
+      const { results } = await res.json();
+      setRows(results || []);
     } catch (err) {
       setError(err.message || 'Failed to load saved drafts.');
     } finally {
@@ -229,19 +248,46 @@ export default function MyTendersPage({ onBack, onNavigate }) {
 
   useEffect(() => { load(); }, [load, authGeneration]);
 
+  // ── Smart Match refresh — invoke-on-use, NOT a cron job ───────────────────
+  // Every time the user opens My Tenders, re-score active_tenders against
+  // their saved AI keywords and fire an instant email for any newly
+  // qualifying match. See server/routes/smartMatch.js for the full flow.
+  const [smartMatchStatus, setSmartMatchStatus] = useState(null);
+
+  useEffect(() => {
+    const token = tokenRef.current;
+    if (!token) return;
+
+    let cancelled = false;
+    fetch(`${API_BASE_URL}/api/smart-match/refresh`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    })
+      .then(res => res.json())
+      .then(result => { if (!cancelled) setSmartMatchStatus(result); })
+      .catch(() => { /* non-fatal — matching just won't refresh this visit */ });
+
+    return () => { cancelled = true; };
+  }, [authGeneration]);
+
   const filtered = filter === 'all' ? rows : rows.filter(r => r.status === filter);
 
   async function handleDelete(row) {
     if (!window.confirm(`Delete draft for "${row.tender_title}"?`)) return;
     setDeleting(row.id);
-    const { error: dbErr } = await supabase
-      .from('tender_responses')
-      .delete()
-      .eq('id', row.id);
-    if (dbErr) {
-      alert('Delete failed: ' + dbErr.message);
-    } else {
+    try {
+      const token = tokenRef.current;
+      const res = await fetch(`${API_BASE_URL}/api/tender-responses/${row.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `Delete failed (${res.status})`);
+      }
       setRows(prev => prev.filter(r => r.id !== row.id));
+    } catch (err) {
+      alert('Delete failed: ' + err.message);
     }
     setDeleting(null);
   }
@@ -333,6 +379,22 @@ export default function MyTendersPage({ onBack, onNavigate }) {
           )}
         </div>
       </div>
+
+      {/* ── Smart Match refresh status — result of the invoke-on-use JS
+           function in server/routes/smartMatch.js (no cron involved) ──────── */}
+      {smartMatchStatus?.ok && smartMatchStatus.newlyNotified > 0 && (
+        <div className="mtp-keywords-banner" role="status">
+          <span className="mtp-keywords-banner__label">
+            <i className="bi bi-stars"></i> {smartMatchStatus.newlyNotified} new smart match
+            {smartMatchStatus.newlyNotified !== 1 ? 'es' : ''} found
+          </span>
+          <span className="mtp-keywords-banner__hint">
+            {smartMatchStatus.emailSent
+              ? 'An email alert has been sent to your inbox.'
+              : `${smartMatchStatus.totalMatched} total matches in your active_tenders scan.`}
+          </span>
+        </div>
+      )}
 
       {/* ── Active match keywords from SmartMatchedTenders AI cache ───────── */}
       {profileCtx.keywords.length > 0 && (
@@ -493,6 +555,7 @@ export default function MyTendersPage({ onBack, onNavigate }) {
           rowId={openDraft.row.id}
           initialStatus={openDraft.row.status}
           userProfile={null}
+          authToken={tokenRef.current}
           onClose={() => setOpenDraft(null)}
           onSaved={() => { load(); }}
         />
