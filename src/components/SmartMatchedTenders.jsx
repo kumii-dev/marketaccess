@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchTenders } from '../lib/api';
+import { isEmbedded } from '../utils/isEmbedded';
 import { 
   extractKeywordsFromBio, 
   analyzeTopTendersInBatch, 
@@ -1272,7 +1273,7 @@ const SmartMatchedTenders = ({ onNavigate } = {}) => {
           <p className="smart-matched-description">
             Hi {getUserDisplayName(profileData)}, we have auto-matched your business profile to tender opportunities.
           </p>
-          {onNavigate && (
+          {onNavigate && !isEmbedded() && (
             <div className="header-actions">
               <button className="header-btn header-btn-secondary" onClick={() => onNavigate('government-tenders')}>
                 Browse Opportunities

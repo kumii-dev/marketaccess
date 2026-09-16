@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import TenderResponseModal from './TenderResponseModal';
 import { useEmailSubscription } from '../hooks/useEmailSubscription';
+import { isEmbedded } from '../utils/isEmbedded';
 import './MyTendersPage.css';
 
 // Same base-URL resolution pattern as src/lib/api.js — empty string in
@@ -354,7 +355,7 @@ export default function MyTendersPage({ onBack, onNavigate }) {
         <button className="mtp-back-btn" onClick={onBack}>
           <i className="bi bi-arrow-left"></i> Back
         </button>
-        {onNavigate && (
+        {onNavigate && !isEmbedded() && (
           <div className="header-actions">
             <button className="header-btn header-btn-secondary" onClick={() => onNavigate('government-tenders')}>
               Browse Opportunities
