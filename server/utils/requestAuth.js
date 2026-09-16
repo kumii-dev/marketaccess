@@ -69,8 +69,101 @@ function decodeJwtPayload(token) {
 }
 
 /**
+ * Resolve (or auto-provision) a real njcancswtqnxihxavshl auth.users row for
+ * a given email, so any downstream INSERT that FK-references auth.users(id)
+ * (email_subscriptions, smart_matched_tenders, tender_responses, ...)
+ * succeeds even for kumii.africa parent-issued tokens whose `sub` claim
+ * isn't itself a row in this project.
+ *
+ * Lookup uses the GoTrue Admin REST API directly (supabase-js's
+ * auth.admin.listUsers() has no reliable single-email filter across
+ * versions). Falls back to creating a new confirmed user for that email
+ * if none exists yet — this is intentionally idempotent and safe to call
+ * on every request; a warm-instance in-memory cache avoids repeating the
+ * round trip for the lifetime of the server process.
+ */
+const _resolvedUserCache = new Map(); // email -> { id, email }
+
+async function findOrCreateAuthUserByEmail(email) {
+  if (!email) return null;
+  if (_resolvedUserCache.has(email)) return _resolvedUserCache.get(email);
+
+  const baseUrl = (process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').replace(/\/$/, '');
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+  if (!baseUrl || !serviceKey) return null;
+
+  const headers = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  try {
+    // 1. Look for an existing user with this email
+    const lookupRes = await fetch(
+      `${baseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
+      { headers }
+    );
+    if (lookupRes.ok) {
+      const body = await lookupRes.json().catch(() => null);
+      const existing = (body?.users || []).find(
+        u => u.email?.toLowerCase() === email.toLowerCase()
+      );
+      if (existing) {
+        const result = { id: existing.id, email: existing.email };
+        _resolvedUserCache.set(email, result);
+        return result;
+      }
+    }
+
+    // 2. None found — auto-provision a shadow user for this iframe-only
+    //    identity so FK-constrained tables can store their data.
+    const createRes = await fetch(`${baseUrl}/auth/v1/admin/users`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        email,
+        email_confirm: true,
+        user_metadata: { source: 'kumii-parent-iframe' },
+      }),
+    });
+    if (createRes.ok) {
+      const created = await createRes.json().catch(() => null);
+      if (created?.id) {
+        const result = { id: created.id, email: created.email || email };
+        _resolvedUserCache.set(email, result);
+        return result;
+      }
+    } else {
+      // Could be a race (user created concurrently) — try lookup once more
+      const retryRes = await fetch(
+        `${baseUrl}/auth/v1/admin/users?email=${encodeURIComponent(email)}`,
+        { headers }
+      );
+      if (retryRes.ok) {
+        const body = await retryRes.json().catch(() => null);
+        const existing = (body?.users || []).find(
+          u => u.email?.toLowerCase() === email.toLowerCase()
+        );
+        if (existing) {
+          const result = { id: existing.id, email: existing.email };
+          _resolvedUserCache.set(email, result);
+          return result;
+        }
+      }
+    }
+  } catch {
+    /* network/parse error — treated as unresolved below */
+  }
+
+  return null;
+}
+
+/**
  * Resolve { id, email } for the Bearer token on a request, trying strict
- * server-side verification first, then falling back to local decode.
+ * server-side verification first, then falling back to local decode +
+ * find-or-create-by-email (see above) so the returned id is always a real,
+ * FK-safe auth.users row in this project.
  */
 export async function getUserFromRequest(req) {
   const authHeader = req.headers.authorization || '';
@@ -88,5 +181,16 @@ export async function getUserFromRequest(req) {
   // Path B — trust-on-decode fallback for parent-issued tokens (see header)
   const payload = decodeJwtPayload(token);
   if (!payload) return null;
+
+  // The token's own `sub` is very likely NOT a row in this project's
+  // auth.users (it's issued by the kumii.africa parent platform), so we
+  // must not use it directly for FK-constrained inserts. Resolve/provision
+  // a real row via email instead.
+  if (payload.email) {
+    const resolved = await findOrCreateAuthUserByEmail(payload.email);
+    if (resolved) return resolved;
+  }
+
+  // Last resort: only safe for read-only endpoints, never for inserts.
   return { id: payload.sub, email: payload.email || '' };
 }
