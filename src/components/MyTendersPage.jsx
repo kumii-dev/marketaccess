@@ -201,20 +201,18 @@ export default function MyTendersPage({ onBack, onNavigate }) {
   const [minScore, setMinScore]     = useState(40);
   const [subEnabled, setSubEnabled] = useState(true);
 
-  // Seed form from loaded subscription
+  // Seed form from loaded subscription only. We intentionally do NOT
+  // auto-fetch the logged-in user's email via supabase.auth.getSession()
+  // when there's no subscription yet — that extra round-trip isn't needed
+  // for efficiency, and the user can simply type their email in below.
   useEffect(() => {
     if (subscription) {
       setUserEmail(subscription.email   || '');
       setFrequency(subscription.frequency || 'weekly');
       setMinScore(subscription.min_score  ?? 40);
       setSubEnabled(subscription.enabled ?? true);
-    } else if (!subLoading) {
-      // Not subscribed yet — pre-fill email from Supabase session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user?.email) setUserEmail(session.user.email);
-      });
     }
-  }, [subscription, subLoading]);
+  }, [subscription]);
 
   const load = useCallback(async () => {
     setLoading(true);
