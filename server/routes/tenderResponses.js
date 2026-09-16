@@ -27,31 +27,11 @@
  */
 
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
 import { generalApiLimiter } from '../middleware/rateLimiters.js';
+import { getAdmin, getUserFromRequest } from '../utils/requestAuth.js';
 
 const router = express.Router();
 router.use(generalApiLimiter);
-
-let _admin = null;
-function getAdmin() {
-  if (_admin) return _admin;
-  _admin = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    { auth: { persistSession: false } }
-  );
-  return _admin;
-}
-
-async function getUserFromRequest(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-  if (!token) return null;
-  const { data: { user }, error } = await getAdmin().auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
 
 /**
  * GET /api/tender-responses

@@ -17,9 +17,9 @@
 
 import express from 'express';
 import { Resend } from 'resend';
-import { createClient } from '@supabase/supabase-js';
 import { generalApiLimiter } from '../middleware/rateLimiters.js';
 import { getActiveTenders } from '../services/tenderSync.js';
+import { getAdmin, getUserFromRequest } from '../utils/requestAuth.js';
 
 const router = express.Router();
 router.use(generalApiLimiter);
@@ -30,17 +30,13 @@ router.use(generalApiLimiter);
 // kumii.africa platform iframe — authenticate against the single Supabase
 // project njcancswtqnxihxavshl.  The qypazgkngxhazgkuevwq project is used
 // only for the api-read-profiles Edge Function and is unrelated to auth.
-
-let _supabaseAdmin = null;
-function getAdmin() {
-  if (_supabaseAdmin) return _supabaseAdmin;
-  _supabaseAdmin = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    { auth: { persistSession: false } }
-  );
-  return _supabaseAdmin;
-}
+//
+// getAdmin()/getUserFromRequest() now live in ../utils/requestAuth.js and are
+// shared across email.js, smartMatch.js and tenderResponses.js. That helper
+// tries strict server-side JWT verification first, then falls back to a
+// local (signature-unverified but expiry-checked) decode for tokens issued
+// by the kumii.africa parent that don't verify against this project — see
+// the module header there for full rationale.
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
@@ -48,21 +44,6 @@ function getResend() {
   return new Resend(key);
 }
 
-// ── JWT → user helper ─────────────────────────────────────────────────────────
-
-/**
- * Resolve a Supabase user from the Bearer JWT.
- * Works for both direct-session tokens and iframe postMessage tokens —
- * both are issued by njcancswtqnxihxavshl so a single getAdmin() call suffices.
- */
-async function getUserFromRequest(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-  if (!token) return null;
-  const { data: { user }, error } = await getAdmin().auth.getUser(token);
-  if (error || !user) return null;
-  return user;
-}
 
 // ── Email HTML builder ────────────────────────────────────────────────────────
 

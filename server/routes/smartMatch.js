@@ -32,40 +32,19 @@
  */
 
 import express from 'express';
-import { createClient } from '@supabase/supabase-js';
 import { generalApiLimiter } from '../middleware/rateLimiters.js';
 import { getActiveTenders } from '../services/tenderSync.js';
 import { buildDigestHtml } from './email.js';
 import { Resend } from 'resend';
+import { getAdmin, getUserFromRequest } from '../utils/requestAuth.js';
 
 const router = express.Router();
 router.use(generalApiLimiter);
-
-// ── Clients (service_role — bypasses RLS by design, see migration header) ────
-let _admin = null;
-function getAdmin() {
-  if (_admin) return _admin;
-  _admin = createClient(
-    process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || '',
-    { auth: { persistSession: false } }
-  );
-  return _admin;
-}
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;
   if (!key) return null; // email is best-effort; matching still works without it
   return new Resend(key);
-}
-
-async function getUserFromRequest(req) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-  if (!token) return null;
-  const { data: { user }, error } = await getAdmin().auth.getUser(token);
-  if (error || !user) return null;
-  return user;
 }
 
 // ── Scoring (mirrors dispatchDigest's server-side pass in routes/email.js) ───
