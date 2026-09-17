@@ -1269,8 +1269,8 @@ const SmartMatchedTenders = ({ onNavigate } = {}) => {
     <div className="smart-matched-container">
       <header className="smart-matched-header">
         <div className="container">
-          <h1 className="smart-matched-title">Smart Matched Tenders</h1>
-          <p className="smart-matched-description">
+          <h1 className="smart-matched-title" style={{ display: 'none' }}>Smart Matched Tenders</h1>
+          <p className="smart-matched-description" style={{ display: 'none' }}>
             Hi {getUserDisplayName(profileData)}, we have auto-matched your business profile to tender opportunities.
           </p>
           {onNavigate && !isEmbedded() && (
