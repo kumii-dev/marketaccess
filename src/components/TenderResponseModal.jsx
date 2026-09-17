@@ -124,8 +124,17 @@ export default function TenderResponseModal({ tender, draft, meta, userProfile, 
     setSaveError(null);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const userId    = session?.user?.id    || userProfile?.id    || 'anonymous';
+      const userId    = session?.user?.id    || userProfile?.id    || null;
       const userEmail = session?.user?.email || userProfile?.email || '';
+
+      // Never fall back to a placeholder like 'anonymous' — user_id is a
+      // UUID column and Postgres rejects non-UUID strings outright. If we
+      // have neither a Bearer token (server-side path resolves the user
+      // itself) nor a resolvable local/profile user id, fail clearly
+      // instead of attempting — and silently failing — the insert.
+      if (!authToken && !userId) {
+        throw new Error('You need to be signed in to save a draft. Please refresh and try again.');
+      }
 
       const payload = {
         user_id:            userId,

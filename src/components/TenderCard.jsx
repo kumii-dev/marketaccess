@@ -23,16 +23,52 @@ const TenderCard = ({ tender, userProfile }) => {
   const [showDraftModal, setShowDraftModal] = useState(false);
   const [sessionUserEmail, setSessionUserEmail] = useState(null);
 
+  // ── Auth token (dual-path, same as MyTendersPage.jsx) ─────────────────────
+  // Path A: direct Supabase session (dev/standalone)
+  // Path B: KUMII_AUTH_TOKEN postMessage from the kumii.africa parent iframe
+  //
+  // Without this, TenderResponseModal had no Bearer token to send to the
+  // server-authenticated /api/tender-responses proxy when "Draft Tender
+  // Response" is used from the Browse Opportunities / Smart Matched pages,
+  // so it fell back to inserting directly via the browser Supabase client
+  // with userId defaulted to the literal string 'anonymous' — which Postgres
+  // rejects with "invalid input syntax for type uuid" since user_id is a UUID
+  // column. Capturing the token here and passing it down fixes that.
+  const [authToken, setAuthToken] = useState(null);
+
   // Read the logged-in user's email from the Supabase session so the AI
   // draft can be attributed correctly even when no userProfile prop is passed.
   useEffect(() => {
+    let cancelled = false;
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
       if (session?.user?.email) setSessionUserEmail(session.user.email);
+      if (session?.access_token) setAuthToken(session.access_token);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (cancelled) return;
       setSessionUserEmail(session?.user?.email || null);
+      if (session?.access_token) setAuthToken(session.access_token);
     });
-    return () => subscription.unsubscribe();
+
+    const handleMessage = (event) => {
+      if (event.data?.type === 'KUMII_AUTH_TOKEN' && event.data.token && !cancelled) {
+        setAuthToken(event.data.token);
+        supabase.auth.setSession({ access_token: event.data.token, refresh_token: '' }).catch(() => {});
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    if (window.parent !== window.self) {
+      window.parent.postMessage({ type: 'REQUEST_AUTH_TOKEN' }, '*');
+    }
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+      window.removeEventListener('message', handleMessage);
+    };
   }, []);
   
   const title = getTenderTitle(tender);
@@ -347,6 +383,7 @@ const TenderCard = ({ tender, userProfile }) => {
           draft={draftData}
           meta={draftMeta}
           userProfile={userProfile}
+          authToken={authToken}
           onClose={() => setShowDraftModal(false)}
           onSaved={() => {}}
         />
