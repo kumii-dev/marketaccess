@@ -672,9 +672,9 @@ function App() {
       /> */}
       <header className="app-header">
         <div className="container">
-          <h1 className="app-title">Access To Market</h1>
+          <h1 className="app-title" style={{ display: 'none' }}>Access To Market</h1>
 
-          <p className="app-description">
+          <p className="app-description" style={{ display: 'none' }}>
             Find relevant tenders, buyer opportunities and procurement programmes matched to your business profile, sector and capabilities.
           </p>
           <div className="header-actions">
