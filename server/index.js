@@ -163,9 +163,16 @@ async function handleSyncRequest(req, res) {
     return res.status(403).json({ error: 'forbidden' });
   }
   const maxPages = Number(req.query.maxPages) || undefined; // undefined → service default
+  // Operator escape hatch (x-sync-key only, not exposed to Vercel Cron's own
+  // requests): override the gov API PageSize/startPage when it's timing out
+  // at the default PAGE_SIZE — see fetchOpenReleasesFromApi() header comment.
+  const pageSizeOverride  = Number(req.query.pageSize) || undefined;
+  const startPageOverride = Number(req.query.startPage) || undefined;
   const result = await syncActiveTenders({
     trigger: req.method === 'GET' ? 'vercel-cron' : 'manual-endpoint',
     ...(maxPages ? { maxPagesThisRun: maxPages } : {}),
+    ...(pageSizeOverride ? { pageSizeOverride } : {}),
+    ...(startPageOverride ? { startPageOverride } : {}),
   });
   res.json({ ok: !result?.error, ...result });
 }

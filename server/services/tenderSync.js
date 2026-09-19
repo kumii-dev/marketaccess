@@ -211,9 +211,9 @@ export function isOpenTender(release, now = new Date()) {
 }
 
 // ── Fetch a single page ───────────────────────────────────────────────────────
-async function fetchPage(pageNumber, dateFrom, dateTo) {
+async function fetchPage(pageNumber, dateFrom, dateTo, pageSize = PAGE_SIZE) {
   const res = await axios.get(OCDS_BASE_URL, {
-    params:  { PageNumber: pageNumber, PageSize: PAGE_SIZE, dateFrom, dateTo },
+    params:  { PageNumber: pageNumber, PageSize: pageSize, dateFrom, dateTo },
     timeout: REQUEST_TIMEOUT_MS,
     headers: { Accept: 'application/json' },
   });
@@ -229,9 +229,63 @@ async function fetchPage(pageNumber, dateFrom, dateTo) {
  * coverage of the gov API's open tenders over several scheduled runs.
  *
  * @param {number} maxPagesThisRun
+ * @param {{ pageSizeOverride?: number, startPageOverride?: number }} [opts]
+ *   pageSizeOverride — bypasses BOTH the default PAGE_SIZE (1000) AND the
+ *   persisted cursor entirely (ephemeral, non-cursor-tracked run). Useful as
+ *   an operator escape hatch when the gov API is intermittently timing out
+ *   at PAGE_SIZE=1000 (observed 2026-09-19: PageSize=1000 timed out even on
+ *   a single-day window, while PageSize=50 succeeded in ~8s) — smaller pages
+ *   trade more HTTP round-trips for a much higher per-request success rate.
+ *   When set, startPageOverride controls the starting page (default 1) since
+ *   there's no cursor to resume from; the caller is responsible for calling
+ *   repeatedly with increasing startPageOverride to page through the full
+ *   dataset.
  * @returns {Promise<{ releases: object[], sweepComplete: boolean, pagesThisRun: number }>}
  */
-export async function fetchOpenReleasesFromApi(maxPagesThisRun = DEFAULT_PAGES_PER_RUN) {
+export async function fetchOpenReleasesFromApi(maxPagesThisRun = DEFAULT_PAGES_PER_RUN, opts = {}) {
+  const { pageSizeOverride, startPageOverride } = opts;
+  const pageSize = pageSizeOverride || PAGE_SIZE;
+
+  // ── Ephemeral override mode — bypasses the persisted cursor entirely ───────
+  if (pageSizeOverride) {
+    const dateFrom = lookbackFrom();
+    const dateTo   = ymd(new Date());
+    const startPage = startPageOverride || 1;
+    const releases = [];
+    let pagesThisRun = 0;
+    let sweepComplete = false;
+
+    for (let page = startPage; page < startPage + maxPagesThisRun; page++) {
+      let pageReleases = null;
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          pageReleases = await fetchPage(page, dateFrom, dateTo, pageSize);
+          break;
+        } catch (err) {
+          const code = err.response?.status || err.code || err.message;
+          if (attempt < 2) {
+            console.warn(`[tender-sync] [override pageSize=${pageSize}] page ${page} attempt ${attempt} failed (${code}) — retrying...`);
+            await sleep(1000);
+          } else {
+            console.warn(`[tender-sync] [override pageSize=${pageSize}] page ${page} failed after ${attempt} attempts (${code}) — stopping this run`);
+          }
+        }
+      }
+      if (pageReleases === null) break;
+      pagesThisRun++;
+      if (!pageReleases.length) { sweepComplete = true; break; }
+      releases.push(...pageReleases);
+      if (page < startPage + maxPagesThisRun - 1) await sleep(300);
+    }
+
+    console.log(
+      `[tender-sync] [override pageSize=${pageSize}] this run: ${pagesThisRun} page(s) from page ${startPage}, ` +
+      `${releases.length} release(s), sweep ${sweepComplete ? 'COMPLETE' : `paused (resume at page ${startPage + pagesThisRun})`}`
+    );
+
+    return { releases, sweepComplete, pagesThisRun, nextPage: startPage + pagesThisRun };
+  }
+
   const cursor = await loadCursor();
 
   // Start a new sweep when: no cursor yet, the previous sweep finished, or the
@@ -412,18 +466,23 @@ export async function pruneExpiredTenders() {
  *   scheduled invocations resume via the persisted cursor until the sweep
  *   completes, then start a fresh sweep.
  */
-export async function syncActiveTenders({ trigger = 'manual', maxPagesThisRun = DEFAULT_PAGES_PER_RUN } = {}) {
+export async function syncActiveTenders({
+  trigger = 'manual',
+  maxPagesThisRun = DEFAULT_PAGES_PER_RUN,
+  pageSizeOverride,
+  startPageOverride,
+} = {}) {
   if (_isSyncing) {
     console.log('[tender-sync] skip — a sync is already running');
     return { skipped: true };
   }
   _isSyncing = true;
   const startedAt = Date.now();
-  console.log(`[tender-sync] ▶ starting (trigger: ${trigger}, maxPagesThisRun: ${maxPagesThisRun})`);
+  console.log(`[tender-sync] ▶ starting (trigger: ${trigger}, maxPagesThisRun: ${maxPagesThisRun}${pageSizeOverride ? `, pageSizeOverride: ${pageSizeOverride}` : ''})`);
 
   try {
-    const { releases: rawReleases, sweepComplete, pagesThisRun } =
-      await fetchOpenReleasesFromApi(maxPagesThisRun);
+    const { releases: rawReleases, sweepComplete, pagesThisRun, nextPage } =
+      await fetchOpenReleasesFromApi(maxPagesThisRun, { pageSizeOverride, startPageOverride });
     const { all, open } = dedupeAndFilterOpen(rawReleases);
 
     let upserted = 0;
@@ -436,15 +495,18 @@ export async function syncActiveTenders({ trigger = 'manual', maxPagesThisRun = 
 
     // Only prune once a full sweep completes — pruning mid-sweep (when we've
     // only seen a fraction of pages so far) would incorrectly delete tenders
-    // whose pages simply haven't been re-fetched yet this sweep.
+    // whose pages simply haven't been re-fetched yet this sweep. Never prune
+    // during an ephemeral pageSizeOverride run — it doesn't track full-sweep
+    // completeness against the persisted cursor, so pruning could incorrectly
+    // remove tenders whose pages just haven't been re-visited yet this run.
     let pruned = 0;
-    if (sweepComplete) {
+    if (sweepComplete && !pageSizeOverride) {
       pruned = await pruneExpiredTenders();
     }
 
     const durationSec = Number(((Date.now() - startedAt) / 1000).toFixed(1));
     _lastSyncAt = new Date().toISOString();
-    _lastResult = { upserted, pruned, pagesThisRun, sweepComplete, durationSec };
+    _lastResult = { upserted, pruned, pagesThisRun, sweepComplete, durationSec, ...(pageSizeOverride ? { nextPage, pageSizeOverride } : {}) };
     console.log(`[tender-sync] ✅ done in ${durationSec}s (upserted ${upserted}, pruned ${pruned}, sweepComplete: ${sweepComplete})`);
     return _lastResult;
   } catch (err) {
