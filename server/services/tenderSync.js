@@ -211,10 +211,10 @@ export function isOpenTender(release, now = new Date()) {
 }
 
 // ── Fetch a single page ───────────────────────────────────────────────────────
-async function fetchPage(pageNumber, dateFrom, dateTo, pageSize = PAGE_SIZE) {
+async function fetchPage(pageNumber, dateFrom, dateTo, pageSize = PAGE_SIZE, timeoutMs = REQUEST_TIMEOUT_MS) {
   const res = await axios.get(OCDS_BASE_URL, {
     params:  { PageNumber: pageNumber, PageSize: pageSize, dateFrom, dateTo },
-    timeout: REQUEST_TIMEOUT_MS,
+    timeout: timeoutMs,
     headers: { Accept: 'application/json' },
   });
   return res.data?.releases || [];
@@ -257,19 +257,15 @@ export async function fetchOpenReleasesFromApi(maxPagesThisRun = DEFAULT_PAGES_P
 
     for (let page = startPage; page < startPage + maxPagesThisRun; page++) {
       let pageReleases = null;
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          pageReleases = await fetchPage(page, dateFrom, dateTo, pageSize);
-          break;
-        } catch (err) {
-          const code = err.response?.status || err.code || err.message;
-          if (attempt < 2) {
-            console.warn(`[tender-sync] [override pageSize=${pageSize}] page ${page} attempt ${attempt} failed (${code}) — retrying...`);
-            await sleep(1000);
-          } else {
-            console.warn(`[tender-sync] [override pageSize=${pageSize}] page ${page} failed after ${attempt} attempts (${code}) — stopping this run`);
-          }
-        }
+      try {
+        // Deep OFFSET-based pagination on this gov API gets consistently
+        // slower the further in you page (observed: page ~22 @ pageSize=25
+        // took 37s) — not just intermittently flaky — so a single attempt
+        // with a generous 50s timeout beats 2×20s retries that both fail.
+        pageReleases = await fetchPage(page, dateFrom, dateTo, pageSize, 50000);
+      } catch (err) {
+        const code = err.response?.status || err.code || err.message;
+        console.warn(`[tender-sync] [override pageSize=${pageSize}] page ${page} failed (${code}) — stopping this run, will retry next invocation`);
       }
       if (pageReleases === null) break;
       pagesThisRun++;
