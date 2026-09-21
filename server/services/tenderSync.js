@@ -56,8 +56,14 @@ import { createClient } from '@supabase/supabase-js';
 
 // ── Config (env-overridable) ──────────────────────────────────────────────────
 const OCDS_BASE_URL      = 'https://ocds-api.etenders.gov.za/api/OCDSReleases';
-const PAGE_SIZE          = Number(process.env.TENDER_SYNC_PAGE_SIZE     || 1000);
-const MAX_PAGES          = Number(process.env.TENDER_SYNC_MAX_PAGES     || 50);
+// ⚠️ 2026-09-19/21: the gov API became far less tolerant of large PageSize
+// values — PageSize=1000 now times out even on a single-day window, while
+// PageSize=50-200 responds reliably (in ~8-50s depending on how deep into
+// the offset-based pagination the request is). Lowered the default page
+// size accordingly and raised MAX_PAGES so the same total lookback-window
+// record volume is still reachable across proportionally more, smaller pages.
+const PAGE_SIZE          = Number(process.env.TENDER_SYNC_PAGE_SIZE     || 200);
+const MAX_PAGES          = Number(process.env.TENDER_SYNC_MAX_PAGES     || 300);
 // Default pages fetched per invocation when the caller doesn't specify one.
 // Sized conservatively so a single run comfortably fits inside a Vercel Hobby
 // function's 10s window even on a slow-but-not-timing-out gov API response.
@@ -515,6 +521,15 @@ export async function syncActiveTenders({
 }
 
 // ── Read helper for GET /api/active-tenders ───────────────────────────────────
+// DISPLAY_LIMIT: cap the number of open tenders surfaced to the frontend to
+// the most recently published ones — mirrors the live eTenders portal
+// (https://www.etenders.gov.za/Home/opportunities?id=1), which shows a
+// bounded "currently open" count (observed ~2,301 on 2026-09-21) rather than
+// every row this app has ever accumulated in active_tenders (which can lag
+// behind or include long-tail/edge-case rows from the 180-day sync lookback
+// window). Env-overridable via TENDER_DISPLAY_LIMIT.
+const DISPLAY_LIMIT = Number(process.env.TENDER_DISPLAY_LIMIT || 2301);
+
 export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
   const admin = getAdmin();
   const nowIso = new Date().toISOString();
@@ -569,6 +584,19 @@ export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
       r.buyer?.name?.toLowerCase().includes(q) ||
       r.tender?.procuringEntity?.name?.toLowerCase().includes(q)
     );
+  }
+
+  // Cap to the most recently published open tenders (DISPLAY_LIMIT), mirroring
+  // the live eTenders portal's own "currently open" count rather than dumping
+  // every open row this app has ever accumulated. "Most recent" = OCDS release
+  // date (falls back to tenderPeriod.startDate, then synced_at) descending.
+  const recencyKey = r =>
+    r.date || r.tender?.tenderPeriod?.startDate || r.tender?.datePublished || '';
+  if (!search && releases.length > DISPLAY_LIMIT) {
+    releases = releases
+      .slice()
+      .sort((a, b) => (recencyKey(b) > recencyKey(a) ? 1 : recencyKey(b) < recencyKey(a) ? -1 : 0))
+      .slice(0, DISPLAY_LIMIT);
   }
 
   // Most recent upsert timestamp across the returned rows = data freshness.
