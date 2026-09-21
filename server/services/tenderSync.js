@@ -532,20 +532,18 @@ const DISPLAY_LIMIT = Number(process.env.TENDER_DISPLAY_LIMIT || 2301);
 
 export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
   const admin = getAdmin();
-  const nowIso = new Date().toISOString();
 
   // IMPORTANT: PostgREST/Supabase silently caps any single .select() response
   // at a project-level "Max Rows" setting (defaults to 1000) REGARDLESS of an
-  // explicit .limit() in code. Previously this route fetched *all* rows
-  // (open + already-closed) ordered by closing_date ascending, so the closed
-  // tenders (sorting first) ate into that 1000-row cap and silently truncated
-  // the open tenders returned — e.g. 587 closed + only 413 of ~1400 open ones
-  // actually made it back, even though the DB had 1987 total rows.
+  // explicit .limit() in code, so we still paginate with .range() below to
+  // avoid silent truncation as active_tenders grows past ~1000 rows.
   //
-  // Fix: (1) filter for open tenders directly in the query (closing_date is
-  // null OR in the future) so closed rows never consume the row cap, and
-  // (2) paginate with .range() in case the open-tender count itself exceeds
-  // the PostgREST cap, so growth beyond ~1000 open tenders doesn't regress.
+  // NOTE: the closing_date open/null filter that used to live here has been
+  // removed per product decision — we now return ALL rows in active_tenders
+  // (open, null-closing-date, and already-closed) and let DISPLAY_LIMIT below
+  // cap/sort the final set by recency instead. This avoids under-displaying
+  // tenders whenever the sync hasn't yet captured enough of the *currently*
+  // open population, or when closing_date data from the gov API is stale/off.
   const pageSize = 1000;
   let allRows = [];
   for (let from = 0; from < limit; from += pageSize) {
@@ -553,8 +551,7 @@ export async function getActiveTenders({ search = '', limit = 3000 } = {}) {
     const { data, error } = await admin
       .from('active_tenders')
       .select('release, province, closing_date, synced_at')
-      .or(`closing_date.is.null,closing_date.gte.${nowIso}`)
-      .order('closing_date', { ascending: true }) // closing soonest first; nulls last
+      .order('synced_at', { ascending: false }) // most recently synced first
       .range(from, to);
 
     if (error) throw error;
